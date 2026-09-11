@@ -1,5 +1,6 @@
 scene = "Title"
 latest_level = 0
+current_level = 0
 
 -- Dispatch by the combined numeric sprite flags (0-255), not flag index.
 -- Bounds and callback coordinates are in map tiles. Defaults: base 128x32 map.
@@ -19,7 +20,7 @@ function scan_map(handlers, map_x, map_y, width, height)
                 local tag = fget(sprite)
                 local handler = handlers[tag]
                 if handler then
-                    handler(x, y, sprite, tag)
+                    handler(x, y, sprite)
                 end
             end
         end
@@ -74,8 +75,11 @@ function transition_update()
         teardown_scene()
         scene = transition_scene
 
-        if transition_level ~= nil and latest_level + 1 == transition_level then
-            latest_level = transition_level
+        if transition_level ~= nil then
+            if latest_level + 1 == transition_level then
+                latest_level = transition_level
+            end
+            current_level = transition_level
         end
 
         init_scene()

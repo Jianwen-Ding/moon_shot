@@ -4,7 +4,8 @@ __lua__
 
 #include common.lua
 
-#include gameplay.lua 
+#include game_systems.lua 
+#include player_systems.lua
 #include main_menu.lua 
 #include title_screen.lua
 
@@ -15,6 +16,7 @@ function init_scene()
   main_menu_init()
  elseif scene == "Gameplay" then
   gameplay_init()
+  player_systems_init()
  end
 end
 
@@ -34,7 +36,9 @@ function update_scene()
  elseif scene == "MainMenu" or scene == "Main Menu" then
   main_menu_update()
  elseif scene == "Gameplay" then
+  player_systems_update()
   game_systems_update()
+
  end
 end
 
@@ -45,6 +49,7 @@ function draw_scene()
   main_menu_draw()
  elseif scene == "Gameplay" then
   gameplay_draw()
+  player_systems_draw()
  end
 end
 
