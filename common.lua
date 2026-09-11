@@ -3,9 +3,9 @@ latest_level = 0
 
 -- Dispatch by the combined numeric sprite flags (0-255), not flag index.
 -- Bounds and callback coordinates are in map tiles. Defaults: base 128x32 map.
--- Example: scanMap({[3] = spawn_planet}, 0, 0, 16, 16)
+-- Example: scan_map({[3] = spawn_planet}, 0, 0, 16, 16)
 -- spawn_planet receives (map_x, map_y, sprite, tag).
-function scanMap(handlers, map_x, map_y, width, height)
+function scan_map(handlers, map_x, map_y, width, height)
     map_x = map_x or 0
     map_y = map_y or 0
     width = width or 128
@@ -26,7 +26,8 @@ function scanMap(handlers, map_x, map_y, width, height)
     end
 end
 
-transition_map = {0, 0}
+-- Reserved 16x16 transition artwork region, in map tile coordinates.
+transition_map = {64, 0}
 transition_duration = 0.5
 transition_time = 0
 transition_x = 128
@@ -35,12 +36,12 @@ transition_scene = nil
 transition_level = nil
 transition_started_at = 0
 
-function transition(newScene, level)
+function transition(new_scene, level)
     if transition_state ~= "idle" then
         return
     end
 
-    transition_scene = newScene
+    transition_scene = new_scene
     transition_level = level
     transition_time = 0
     transition_x = 128
@@ -48,7 +49,7 @@ function transition(newScene, level)
     transition_state = "covering"
 end
 
-function transitionUpdate()
+function transition_update()
     if transition_state == "idle" then
         return
     end
@@ -70,13 +71,14 @@ function transitionUpdate()
 
         -- Swap scenes only while the map covers every screen pixel.
         transition_x = 0
+        teardown_scene()
         scene = transition_scene
 
         if transition_level ~= nil and latest_level + 1 == transition_level then
             latest_level = transition_level
         end
 
-        initScene()
+        init_scene()
         transition_started_at = time()
         transition_state = "revealing"
         return
@@ -98,7 +100,7 @@ function transitionUpdate()
     end
 end
 
-function transitionDraw()
+function transition_draw()
     if transition_state ~= "idle" then
         camera()
         map(transition_map[1], transition_map[2], flr(transition_x), 0, 16, 16)

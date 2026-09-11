@@ -8,59 +8,69 @@ __lua__
 #include main_menu.lua 
 #include title_screen.lua
 
-function initScene()
+function init_scene()
  if scene == "Title" then
-  titleScreenInit()
+  title_screen_init()
  elseif scene == "MainMenu" or scene == "Main Menu" then
-  mainMenuInit()
+  main_menu_init()
  elseif scene == "Gameplay" then
-  gameplayInit()
+  gameplay_init()
  end
 end
 
-function updateScene()
+function teardown_scene()
  if scene == "Title" then
-  titleScreenUpdate()
+  title_screen_teardown()
  elseif scene == "MainMenu" or scene == "Main Menu" then
-  mainMenuUpdate()
+  main_menu_teardown()
  elseif scene == "Gameplay" then
-  gameplayUpdate()
+  gameplay_teardown()
  end
 end
 
-function drawScene()
+function update_scene()
  if scene == "Title" then
-  titleScreenDraw()
+  title_screen_update()
  elseif scene == "MainMenu" or scene == "Main Menu" then
-  mainMenuDraw()
+  main_menu_update()
  elseif scene == "Gameplay" then
-  gameplayDraw()
+  game_systems_update()
+ end
+end
+
+function draw_scene()
+ if scene == "Title" then
+  title_screen_draw()
+ elseif scene == "MainMenu" or scene == "Main Menu" then
+  main_menu_draw()
+ elseif scene == "Gameplay" then
+  gameplay_draw()
  end
 end
 
 function _init()
- initScene()
+ init_scene()
 end
 
 function _update()
  if transition_state == "idle" then
-  updateScene()
+  update_scene()
  else
-  transitionUpdate()
+  transition_update()
  end
 end
 
 function _draw()
  if transition_state == "covering" then
   -- Preserve the last scene frame while the wipe enters.
-  transitionDraw()
+  transition_draw()
  elseif transition_state == "revealing" then
   -- Reveal the initialized, frozen scene behind the wipe.
-  drawScene()
-  transitionDraw()
+  draw_scene()
+  transition_draw()
  else
   cls(1)
-  drawScene()
+  draw_scene()
  end
 end
 __gfx__
