@@ -10,32 +10,32 @@ __lua__
 #include title_screen.lua
 
 function init_scene()
- if scene == "Title" then
+ if Scene == "Title" then
   title_screen_init()
- elseif scene == "MainMenu" or scene == "Main Menu" then
+ elseif Scene == "MainMenu" or Scene == "Main Menu" then
   main_menu_init()
- elseif scene == "Gameplay" then
+ elseif Scene == "Gameplay" then
   gameplay_init()
   player_systems_init()
  end
 end
 
 function teardown_scene()
- if scene == "Title" then
+ if Scene == "Title" then
   title_screen_teardown()
- elseif scene == "MainMenu" or scene == "Main Menu" then
+ elseif Scene == "MainMenu" or Scene == "Main Menu" then
   main_menu_teardown()
- elseif scene == "Gameplay" then
+ elseif Scene == "Gameplay" then
   gameplay_teardown()
  end
 end
 
 function update_scene()
- if scene == "Title" then
+ if Scene == "Title" then
   title_screen_update()
- elseif scene == "MainMenu" or scene == "Main Menu" then
+ elseif Scene == "MainMenu" or Scene == "Main Menu" then
   main_menu_update()
- elseif scene == "Gameplay" then
+ elseif Scene == "Gameplay" then
   player_systems_update()
   game_systems_update()
 
@@ -43,11 +43,11 @@ function update_scene()
 end
 
 function draw_scene()
- if scene == "Title" then
+ if Scene == "Title" then
   title_screen_draw()
- elseif scene == "MainMenu" or scene == "Main Menu" then
+ elseif Scene == "MainMenu" or Scene == "Main Menu" then
   main_menu_draw()
- elseif scene == "Gameplay" then
+ elseif Scene == "Gameplay" then
   gameplay_draw()
   player_systems_draw()
  end
@@ -58,7 +58,7 @@ function _init()
 end
 
 function _update()
- if transition_state == "idle" then
+ if Transition_state == "idle" then
   update_scene()
  else
   transition_update()
@@ -66,10 +66,10 @@ function _update()
 end
 
 function _draw()
- if transition_state == "covering" then
+ if Transition_state == "covering" then
   -- Preserve the last scene frame while the wipe enters.
   transition_draw()
- elseif transition_state == "revealing" then
+ elseif Transition_state == "revealing" then
   -- Reveal the initialized, frozen scene behind the wipe.
   draw_scene()
   transition_draw()

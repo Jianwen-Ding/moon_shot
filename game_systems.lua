@@ -1,9 +1,9 @@
 -- Reserved 16x16 map regions, in tile coordinates (x, y).
-background_loc = {32, 0}
-gameplay_loc = {48, 0}
+Background_loc = {32, 0}
+Gameplay_loc = {48, 0}
 
 -- Holds entities and their attached components, including position transforms.
-entities = {} 
+Entities = {} 
 
 -- holds all specific logic of the entity
 -- Component lists are independent of the entity list.
@@ -13,13 +13,13 @@ entities = {}
 -- Keep fractional transform coordinates for physics and collisions.
 -- Convert to whole pixels only when drawing; never round the transform itself.
 -- entity.collisions contains references to touching entities.
-square_colliders = {}
-circle_colliders = {}
-physics_components = {}
-gravity_components = {}
-sprite_components = {}
-countdown_components = {}
-animation_components = {}
+Square_colliders = {}
+Circle_colliders = {}
+Physics_components = {}
+Gravity_components = {}
+Sprite_components = {}
+Countdown_components = {}
+Animation_components = {}
 
 -- Register both directions without relying on matching list indices.
 function attach_component(entity, name, component, components)
@@ -29,86 +29,161 @@ function attach_component(entity, name, component, components)
     return component
 end
 
--- Spawning logic
-
-
-local function default_planet_spawn(map_x, map_y, sprite) 
-
-end 
-
-local function base_planet_spawn(map_x, map_y, sprite, gravity_sprite, size, range, force)
-    local transform = {}
-    transform.x = map_x + (size / 2)
-    transform.y = map_y + (size / 2)
-
-    -- Set up gravity entity 
-    local gravity_entity = {}
-    gravity_entity.transform = transform
-
-    local gravity_collider = {}
-    gravity_collider.radius = range
-    gravity_collider.entity = gravity_entity
-    gravity_entity.circle_collider = gravity_collider
-    add(circle_colliders, gravity_collider)
-
-    gravity_entity.collisions = {}
-    
-    local gravity_component = {}
-    gravity_component.force = force
-    gravity_component.entity = gravity_entity
-    gravity_entity.gravity_component = gravity_component
-    add(gravity_components, gravity_component)
-
-    local gravity_animation = {}
-    gravity_animation.base_id = 0 -- to do 
-    gravity_animation.frames = 2
-    gravity_animation.transition_delay = 0.5
-    gravity_animation.transition_time = 0
-    gravity_animation.looped = true
-    attach_component(gravity_entity, "animation_component", gravity_animation, animation_components)
-    attach_component(gravity_entity, "sprite_component",
-        {id=gravity_sprite, width=8, height=8}, sprite_components)
-
-    add(entities, gravity_entity)
-
-    local base_entity = {}
-    base_entity.transform = transform
-
-    local base_collider = {}
-    base_collider.radius = size
-    base_collider.entity = base_entity
-    base_entity.
-    base_entity.collisions = {}
+-- Start or restart a lifetime measured in seconds of active gameplay.
+local function start_countdown(entity, duration)
+    local countdown = entity.countdown_component
+    if countdown == nil then
+        countdown = attach_component(entity, "countdown_component", {}, Countdown_components)
+    end
+    countdown.duration = max(0, duration)
+    countdown.elapsed_frames = 0
+    countdown.elapsed_time = 0
+    return countdown
 end
 
-local function goal_hit(other)
-    if other.tag == "goal" then 
-        transition("GamePlay", current_level + 1)
+local function destroy_entity(entity)
+    -- Resolve ownership through references, independently of list order.
+    local component_lists = {
+        Square_colliders, Circle_colliders, Physics_components,
+        Gravity_components, Sprite_components, Countdown_components,
+        Animation_components
+    }
+    for _, components in ipairs(component_lists) do
+        for i = #components, 1, -1 do
+            local component = components[i]
+            if component.entity == entity then
+                for name, attached in pairs(entity) do
+                    if attached == component then
+                        entity[name] = nil
+                    end
+                end
+                del(components, component)
+                component.entity = nil
+            end
+        end
     end
 
-
+    -- Remove stale contact references before any remaining physics runs.
+    for _, other in pairs(Entities) do
+        if other.collisions then
+            for i = #other.collisions, 1, -1 do
+                if other == entity or other.collisions[i] == entity then
+                    del(other.collisions, other.collisions[i])
+                end
+            end
+        end
+    end
+    del(Entities, entity)
+    entity.collisions = nil
+    -- Detach the transform without modifying a transform shared by an owner.
+    entity.transform = nil
 end
 
--- scan_map callback: tag 1 marks a stationary 8x8 block.
-local function spawn_block(map_x, map_y, sprite, tag)
-    local entity = {
-        transform = {
-            x = (map_x - gameplay_loc[1]) * 8 + 4,
-            y = (map_y - gameplay_loc[2]) * 8 + 4
-        },
-        tag = tag,
-        collisions = {}
-    }
+local function update_countdowns()
+    local expired = {}
+    for _, countdown in pairs(Countdown_components) do
+        -- The cartridge uses _update (30 updates per second).
+        countdown.elapsed_frames = (countdown.elapsed_frames or 0) + 1
+        countdown.elapsed_time = countdown.elapsed_frames / 30
+        if countdown.elapsed_time >= countdown.duration then
+            expired[countdown.entity] = true
+        end
+    end
+    -- Defer deletion until every timer has been checked.
+    for entity in pairs(expired) do
+        if expired.expire ~= nil then
+            expired.expire()
+        end
+        destroy_entity(entity)
+    end
+end
 
-    add(entities, entity)
-    attach_component(entity, "square_collider", {width=8, height=8}, square_colliders)
-    attach_component(entity, "sprite_component", {id=sprite, width=8, height=8}, sprite_components)
+-- Spawning logic
+
+-- x/y are center coordinates in pixels; frames use consecutive sprite IDs.
+-- Defaults: four frames, 0.125 seconds per frame, then destroy after 0.5 seconds.
+function spawn_timed_animation(x, y, base_id, frames, transition_delay, duration)
+    frames = max(1, flr(frames or 4))
+    transition_delay = max(0, transition_delay or 0.125)
+    duration = duration or frames * transition_delay
+
+    local entity = {transform={x=x, y=y}, collisions={}}
+    add(Entities, entity)
+    attach_component(entity, "sprite_component",
+        {id=base_id, width=8, height=8}, Sprite_components)
+    attach_component(entity, "animation_component", {
+        base_id = base_id,
+        frames = frames,
+        transition_delay = transition_delay,
+        transition_time = 0,
+        looped = false
+    }, Animation_components)
+    start_countdown(entity, duration)
+    return entity
+end
+
+local function regular_collision(entity, other)
+    return spawn_timed_animation(entity.transform.x, entity.transform.y, 0, 4, 0.05, 0.25)
+end
+
+function default_planet_spawn(map_x, map_y, sprite) 
+    entity = base_planet_spawn(map_x, map_y, sprite, 0, 8, 16, 9.8)
+    entity.collision = regular_collision
+    return entity
+end 
+
+function goal_planet_spawn(map_x, map_y, sprite)
+    entity = base_planet_spawn(map_x, map_y, sprite, 0, 8, 16, 9.8)
+    entity.tag = "goal"
+    return entity
+end
+
+local function base_planet_spawn(map_x, map_y, sprite, gravity_sprite, size, range, force)
+    local transform = {x=map_x + (size / 2), y=map_y + (size / 2)}
+
+    -- Set up gravity entity 
+    local gravity_entity = {transform=transform, collisions={}}
+
+    attach_component(gravity_entity, "circle_collider", {radius=range}, Circle_colliders)
+    attach_component(gravity_entity, "gravity_component", {force=force}, Gravity_components)
+
+    -- TODO: choose the gravity animation's base sprite ID.
+    attach_component(gravity_entity, "animation_component",
+        {base_id=0, frames=2, transition_delay=0.5, transition_time=0, looped=true}, Animation_components)
+    attach_component(gravity_entity, "sprite_component",
+        {id=gravity_sprite, width=8, height=8}, Sprite_components)
+
+    add(Entities, gravity_entity)
+
+    local base_entity = {transform=transform, collisions={}}
+
+    attach_component(base_entity, "circle_collider", {radius=size}, Circle_colliders)
+    attach_component(base_entity, "sprite_component", {id=0, width=8, height=8}, Sprite_components)
+    attach_component(base_entity, "physics_component", {vel_x=0, vel_y=0}, Sprite_components)
+
+    add(Entities, base_entity)
+
+    return base_entity
+end
+
+local function goal_collision(entity, other)
+    if other.tag == "goal" then 
+        transition("GamePlay", Current_level + 1)
+    end
+    regular_collision(other)
+end
+
+function ship_spawn(map_x, map_y, sprite)
+    entity = base_planet_spawn(map_x, map_y, sprite, 0, 8, 16, 9.8)
+    entity.collision = goal_collision
     return entity
 end
 
 -- Keys are combined sprite flag values, as read by scan_map.
-local gameplay_spawn_handlers = {
-    [1] = spawn_block
+Gameplay_spawn_handlers = {
+    [1] = default_planet_spawn,
+    [2] = goal_planet_spawn,
+    [3]
 }
 
 
@@ -161,7 +236,7 @@ end
 local function check_collisions()
     -- Clear all contacts once per check, before collecting either shape type.
     local active_entities = {}
-    for _, entity in pairs(entities) do
+    for _, entity in pairs(Entities) do
         if not active_entities[entity] then
             active_entities[entity] = true
             entity.collisions = entity.collisions or {}
@@ -172,7 +247,7 @@ local function check_collisions()
     end
 
     local shapes = {}
-    for _, shape in pairs(square_colliders) do
+    for _, shape in pairs(Square_colliders) do
         local entity = shape.entity
         if entity and active_entities[entity] and entity.transform then
             shapes[#shapes + 1] = {
@@ -180,7 +255,7 @@ local function check_collisions()
             }
         end
     end
-    for _, shape in pairs(circle_colliders) do
+    for _, shape in pairs(Circle_colliders) do
         local entity = shape.entity
         if entity and active_entities[entity] and entity.transform then
             shapes[#shapes + 1] = {
@@ -202,7 +277,7 @@ end
 
 --- Determines objects are effected by velocity and gravity 
 local function run_physics() 
-    for _, physics_component in ipairs(physics_components) do
+    for _, physics_component in ipairs(Physics_components) do
         local this_entity = physics_component.entity
         -- entity 
         for _, collided_entity in ipairs(this_entity.collisions) do
@@ -226,11 +301,11 @@ local function run_physics()
                     end
                 else
                     if this_entity.collided then
-                        this_entity.collided(collided_entity)
+                        this_entity:collided(collided_entity)
                     end 
 
                     if collided_entity.collided then
-                        collided_entity.collided(this_entity)
+                        collided_entity:collided(this_entity)
                     end 
                 end
             end
@@ -243,21 +318,25 @@ local function run_physics()
 end
 
 function gameplay_init()
-    scan_map(gameplay_spawn_handlers, gameplay_loc[1], gameplay_loc[2], 16, 16)
+    scan_map(Gameplay_spawn_handlers, Gameplay_loc[1], Gameplay_loc[2], 16, 16)
 end
 
 function gameplay_teardown()
-    entities = {}
-    square_colliders = {}
-    circle_colliders = {}
-    physics_components = {}
-    gravity_components = {}
-    sprite_components = {}
-    countdown_components = {}
-    animation_components = {}
+    Entities = {}
+    Square_colliders = {}
+    Circle_colliders = {}
+    Physics_components = {}
+    Gravity_components = {}
+    Sprite_components = {}
+    Countdown_components = {}
+    Animation_components = {}
 end
 
 function game_systems_update()
+    if Transition_state ~= nil and Transition_state ~= "idle" then
+        return
+    end
+    update_countdowns()
     check_collisions()
     run_physics()
 end
@@ -296,8 +375,8 @@ end
 
 function gameplay_draw()
     local now = time()
-    local paused = transition_state ~= nil and transition_state ~= "idle"
-    for _, sprite_component in pairs(sprite_components) do
+    local paused = Transition_state ~= nil and Transition_state ~= "idle"
+    for _, sprite_component in pairs(Sprite_components) do
         local transform = sprite_component.entity.transform
         local sprite_x = flr(transform.x - (sprite_component.width / 2))
         local sprite_y = flr(transform.y - (sprite_component.height / 2))

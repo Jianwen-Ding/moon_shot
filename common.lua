@@ -1,6 +1,6 @@
-scene = "Title"
-latest_level = 0
-current_level = 0
+Scene = "Title"
+Latest_level = 0
+Current_level = 0
 
 -- Dispatch by the combined numeric sprite flags (0-255), not flag index.
 -- Bounds and callback coordinates are in map tiles. Defaults: base 128x32 map.
@@ -28,85 +28,85 @@ function scan_map(handlers, map_x, map_y, width, height)
 end
 
 -- Reserved 16x16 transition artwork region, in map tile coordinates.
-transition_map = {64, 0}
-transition_duration = 0.5
-transition_time = 0
-transition_x = 128
-transition_state = "idle"
-transition_scene = nil
-transition_level = nil
-transition_started_at = 0
+Transition_map = {64, 0}
+Transition_duration = 0.5
+Transition_time = 0
+Transition_x = 128
+Transition_state = "idle"
+Transition_scene = nil
+Transition_level = nil
+Transition_started_at = 0
 
 function transition(new_scene, level)
-    if transition_state ~= "idle" then
+    if Transition_state ~= "idle" then
         return
     end
 
-    transition_scene = new_scene
-    transition_level = level
-    transition_time = 0
-    transition_x = 128
-    transition_started_at = time()
-    transition_state = "covering"
+    Transition_scene = new_scene
+    Transition_level = level
+    Transition_time = 0
+    Transition_x = 128
+    Transition_started_at = time()
+    Transition_state = "covering"
 end
 
 function transition_update()
-    if transition_state == "idle" then
+    if Transition_state == "idle" then
         return
     end
 
-    local phase_duration = transition_duration / 2
+    local phase_duration = Transition_duration / 2
 
-    if transition_state == "covering" then
+    if Transition_state == "covering" then
         local progress = 1
         if phase_duration > 0 then
-            progress = min((time() - transition_started_at) / phase_duration, 1)
+            progress = min((time() - Transition_started_at) / phase_duration, 1)
         end
 
-        transition_time = progress * phase_duration
-        transition_x = 128 - progress * 128
+        Transition_time = progress * phase_duration
+        Transition_x = 128 - progress * 128
 
         if progress < 1 then
             return
         end
 
         -- Swap scenes only while the map covers every screen pixel.
-        transition_x = 0
+        Transition_x = 0
         teardown_scene()
-        scene = transition_scene
+        Scene = Transition_scene
 
-        if transition_level ~= nil then
-            if latest_level + 1 == transition_level then
-                latest_level = transition_level
+        if Transition_level ~= nil then
+            if Latest_level + 1 == Transition_level then
+                Latest_level = Transition_level
             end
-            current_level = transition_level
+            Current_level = Transition_level
         end
 
         init_scene()
-        transition_started_at = time()
-        transition_state = "revealing"
+        Transition_started_at = time()
+        Transition_state = "revealing"
         return
     end
 
     local progress = 1
     if phase_duration > 0 then
-        progress = min((time() - transition_started_at) / phase_duration, 1)
+        progress = min((time() - Transition_started_at) / phase_duration, 1)
     end
 
-    transition_time = phase_duration + progress * phase_duration
-    transition_x = -progress * 128
+    Transition_time = phase_duration + progress * phase_duration
+    Transition_x = -progress * 128
 
     if progress >= 1 then
-        transition_state = "idle"
-        transition_scene = nil
-        transition_level = nil
-        transition_x = -128
+        Transition_state = "idle"
+        Transition_scene = nil
+        Transition_level = nil
+        Transition_x = -128
     end
 end
 
 function transition_draw()
-    if transition_state ~= "idle" then
+    if Transition_state ~= "idle" then
         camera()
-        map(transition_map[1], transition_map[2], flr(transition_x), 0, 16, 16)
+        map(Transition_map[1], Transition_map[2], flr(Transition_x), 0, 16, 16)
     end
 end
