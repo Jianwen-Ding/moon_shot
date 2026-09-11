@@ -39,6 +39,7 @@ end
 local function get_current_level() 
     return ((Current_menu_loc[2] - 1) * Menu_bounds[1]) + Current_menu_loc[1]
 end
+
 function main_menu_update()
     if btn(0) ~= btn(1) then
         if btn(0) then

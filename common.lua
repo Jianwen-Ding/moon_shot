@@ -17,10 +17,9 @@ function scan_map(handlers, map_x, map_y, width, height)
             local sprite = mget(x, y)
             -- Sprite 0 represents an empty map cell.
             if sprite ~= 0 then
-                local tag = fget(sprite)
-                local handler = handlers[tag]
+                handler = handlers[sprite]
                 if handler then
-                    handler(x, y, sprite)
+                    handler(x, y)
                 end
             end
         end

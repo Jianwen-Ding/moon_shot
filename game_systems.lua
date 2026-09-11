@@ -2,6 +2,14 @@
 Background_loc = {32, 0}
 Gameplay_loc = {48, 0}
 
+-- Sprite IDs: set these when the artwork is ready.
+Id_ship_sprite = 0 
+Id_goal_planet_sprite = 0
+Id_default_planet_sprite = 0 
+Id_default_gravity_sprite = 0
+Id_destruct_base_sprite = 0
+
+
 -- Holds entities and their attached components, including position transforms.
 Entities = {} 
 
@@ -42,6 +50,11 @@ local function start_countdown(entity, duration)
 end
 
 local function destroy_entity(entity)
+    if entity.gravity_entity then
+        local gravity_entity = entity.gravity_entity
+        entity.gravity_entity = nil
+        destroy_entity(gravity_entity)
+    end
     -- Resolve ownership through references, independently of list order.
     local component_lists = {
         Square_colliders, Circle_colliders, Physics_components,
@@ -91,13 +104,18 @@ local function update_countdowns()
     end
     -- Defer deletion until every timer has been checked.
     for entity in pairs(expired) do
-        if expired.expire ~= nil then
-            expired.expire()
+        if entity.expire ~= nil then
+            entity:expire()
         end
         destroy_entity(entity)
     end
 end
 
+local function restart_level() 
+    if Transition_state == "idle" then
+        transition("Gameplay", Current_level)
+    end
+end
 -- Spawning logic
 
 -- x/y are center coordinates in pixels; frames use consecutive sprite IDs.
@@ -123,22 +141,40 @@ function spawn_timed_animation(x, y, base_id, frames, transition_delay, duration
 end
 
 local function regular_collision(entity, other)
-    return spawn_timed_animation(entity.transform.x, entity.transform.y, 0, 4, 0.05, 0.25)
+    if entity.destroy_pending then
+        return
+    end
+    entity.destroy_pending = true
+    local explosion = spawn_timed_animation(entity.transform.x, entity.transform.y, Id_destruct_base_sprite, 4, 0.05, 0.25)
+    if entity.tag == "ship" or entity.tag == "goal" then
+        explosion.expire = restart_level
+    end
+    return explosion
 end
 
-function default_planet_spawn(map_x, map_y, sprite) 
-    entity = base_planet_spawn(map_x, map_y, sprite, 0, 8, 16, 9.8)
-    entity.collision = regular_collision
+local function goal_planet_collision(entity, other)
+    -- Landing the ship on the goal is handled by the ship's win callback.
+    if other.tag ~= "ship" then
+        regular_collision(entity, other)
+    end
+end
+
+local base_planet_spawn
+
+function default_planet_spawn(map_x, map_y) 
+    local entity = base_planet_spawn(map_x, map_y, Id_default_planet_sprite, Id_default_gravity_sprite, 8, 16, 9.8)
+    entity.collided = regular_collision
     return entity
 end 
 
-function goal_planet_spawn(map_x, map_y, sprite)
-    entity = base_planet_spawn(map_x, map_y, sprite, 0, 8, 16, 9.8)
+function goal_planet_spawn(map_x, map_y)
+    local entity = base_planet_spawn(map_x, map_y, Id_goal_planet_sprite, Id_default_gravity_sprite, 8, 16, 9.8)
     entity.tag = "goal"
+    entity.collided = goal_planet_collision
     return entity
 end
 
-local function base_planet_spawn(map_x, map_y, sprite, gravity_sprite, size, range, force)
+base_planet_spawn = function(map_x, map_y, sprite, gravity_sprite, size, range, force)
     local transform = {x=map_x + (size / 2), y=map_y + (size / 2)}
 
     -- Set up gravity entity 
@@ -147,19 +183,18 @@ local function base_planet_spawn(map_x, map_y, sprite, gravity_sprite, size, ran
     attach_component(gravity_entity, "circle_collider", {radius=range}, Circle_colliders)
     attach_component(gravity_entity, "gravity_component", {force=force}, Gravity_components)
 
-    -- TODO: choose the gravity animation's base sprite ID.
     attach_component(gravity_entity, "animation_component",
-        {base_id=0, frames=2, transition_delay=0.5, transition_time=0, looped=true}, Animation_components)
+        {base_id=gravity_sprite, frames=2, transition_delay=0.5, transition_time=0, looped=true}, Animation_components)
     attach_component(gravity_entity, "sprite_component",
         {id=gravity_sprite, width=8, height=8}, Sprite_components)
 
     add(Entities, gravity_entity)
 
-    local base_entity = {transform=transform, collisions={}}
+    local base_entity = {transform=transform, collisions={}, gravity_entity=gravity_entity}
 
     attach_component(base_entity, "circle_collider", {radius=size}, Circle_colliders)
-    attach_component(base_entity, "sprite_component", {id=0, width=8, height=8}, Sprite_components)
-    attach_component(base_entity, "physics_component", {vel_x=0, vel_y=0}, Sprite_components)
+    attach_component(base_entity, "sprite_component", {id=sprite, width=8, height=8}, Sprite_components)
+    attach_component(base_entity, "physics_component", {vel_x=0, vel_y=0}, Physics_components)
 
     add(Entities, base_entity)
 
@@ -168,14 +203,16 @@ end
 
 local function goal_collision(entity, other)
     if other.tag == "goal" then 
-        transition("GamePlay", Current_level + 1)
+        transition("Gameplay", Current_level + 1)
+        return
     end
-    regular_collision(other)
+    regular_collision(entity, other)
 end
 
-function ship_spawn(map_x, map_y, sprite)
-    entity = base_planet_spawn(map_x, map_y, sprite, 0, 8, 16, 9.8)
-    entity.collision = goal_collision
+function ship_spawn(map_x, map_y)
+    local entity = base_planet_spawn(map_x, map_y, Id_ship_sprite, Id_default_gravity_sprite, 8, 16, 9.8)
+    entity.tag = "ship"
+    entity.collided = goal_collision
     return entity
 end
 
@@ -183,7 +220,7 @@ end
 Gameplay_spawn_handlers = {
     [1] = default_planet_spawn,
     [2] = goal_planet_spawn,
-    [3]
+    [3] = ship_spawn
 }
 
 
@@ -281,7 +318,8 @@ local function run_physics()
         local this_entity = physics_component.entity
         -- entity 
         for _, collided_entity in ipairs(this_entity.collisions) do
-            if collided_entity.transform ~= this_entity.transform then
+            if not this_entity.destroy_pending and not collided_entity.destroy_pending
+                and collided_entity.transform ~= this_entity.transform then
                 -- Follow the gravity component attached to the other entity.
                 if collided_entity.gravity_component ~= nil then
                     local diff_x = collided_entity.transform.x - this_entity.transform.x
@@ -303,17 +341,38 @@ local function run_physics()
                     if this_entity.collided then
                         this_entity:collided(collided_entity)
                     end 
+                    if Transition_state ~= nil and Transition_state ~= "idle" then
+                        return
+                    end
 
                     if collided_entity.collided then
                         collided_entity:collided(this_entity)
                     end 
+                    if Transition_state ~= nil and Transition_state ~= "idle" then
+                        return
+                    end
                 end
             end
             -- handles 
         end
 
-        this_entity.transform.x = this_entity.transform.x + physics_component.vel_x
-        this_entity.transform.y = this_entity.transform.y + physics_component.vel_y
+        if not this_entity.destroy_pending then
+            this_entity.transform.x = this_entity.transform.x + physics_component.vel_x
+            this_entity.transform.y = this_entity.transform.y + physics_component.vel_y
+        end
+    end
+end
+
+local function destroy_pending_entities()
+    -- Collision callbacks queue removal so physics never iterates a shrinking list.
+    local pending = {}
+    for _, entity in pairs(Entities) do
+        if entity.destroy_pending then
+            add(pending, entity)
+        end
+    end
+    for _, entity in ipairs(pending) do
+        destroy_entity(entity)
     end
 end
 
@@ -337,8 +396,12 @@ function game_systems_update()
         return
     end
     update_countdowns()
+    if Transition_state ~= nil and Transition_state ~= "idle" then
+        return
+    end
     check_collisions()
     run_physics()
+    destroy_pending_entities()
 end
 
 -- Frames use consecutive sprite IDs, starting at base_id.

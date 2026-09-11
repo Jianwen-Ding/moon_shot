@@ -3,6 +3,7 @@ Current_throw_angle = 0
 Current_throw_strength = 0
 Current_throw_cooldown = 0
 Throw_inventory_ids = {}
+Throw_inventory_sprites = {}
 
 Throw_cooldown = 30
 Throw_angle_speed = 1
@@ -18,6 +19,7 @@ Throw_inventory_level_ids = {{}} -- moon inventory per level
 -- UI Logic 
 
 Ui_frame_start_loc = {0, 0}
+Ui_frame_offset = {0, 0}
 Ui_frame_dist_apart = 0
 Ui_frame_sprite = 0
 Ui_selected_frame_sprite = 0
@@ -26,6 +28,8 @@ Ui_selected_frame_sprite = 0
 function player_systems_init()
     Current_throw_angle = 0
     Current_throw_strength = 0
+    Current_throw_cooldown = 0
+    Thrown_self = false
     Throw_inventory_ids = {}
 end
 
@@ -71,4 +75,21 @@ end
 
 function player_systems_draw()
     -- Draw aiming indicators and inventory UI here.
+    iter_frame_loc = Ui_frame_start_loc
+    for idx, id in ipairs(Throw_inventory_ids) then
+        local sprite_id
+        if idx == 0 then
+            sprite_id = Ui_selected_frame_sprite
+        else
+            sprite_id = Ui_frame_sprite
+        end
+        spr(sprite_id, iter_frame_loc[0], iter_frame_loc[1])
+        
+        adjusted_x = Ui_frame_offset + iter_frame_loc[0]
+        adjusted_y = Ui_frame_offset + iter_frame_loc[1]
+
+        spr(id, adjusted_x, adjusted_y)
+
+        iter_frame_loc[0] = iter_frame_loc[0] + Ui_frame_dist_apart
+    end
 end
