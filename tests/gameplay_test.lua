@@ -63,10 +63,14 @@ local lua_code = cart:match("__lua__\n(.-)__gfx__")
 lua_code = lua_code:gsub("#include ([^\n]+)", function(path)
     return read(root..path:match("^%s*(.-)%s*$"))
 end)
-assert(load(lua_code,"@moon_shot.p8"))()
+local spawn_timed_animation = assert(load(lua_code.."\nreturn spawn_timed_animation","@moon_shot.p8"))()
 local passed = 0
 local function test(name, fn)
     if arg[1] and not name:find(arg[1],1,true) then return end
+    gameplay_teardown()
+    Scene, Current_level, Transition_state, Transition_level = "Title",0,"idle",nil
+    Level_failed, Campaign_complete, Latest_level, Completed_levels = false,false,0,{}
+    held, pressed = {},{}
     fn()
     passed = passed+1
     host_print("ok - "..name)
@@ -172,9 +176,8 @@ test("eight distinct maps, centered colliders and copied inventories", function(
         for _, entity in ipairs(Entities) do
             if entity.tag == "ship" then ship = ship+1 end
             if entity.tag == "goal" then goal = goal+1 end
-            if entity.physics_component then
-                assert(entity.circle_collider.radius == 4)
-                assert(not entity.physics_component.enabled)
+            if not entity.gravity_component then
+                if entity.circle_collider then assert(entity.circle_collider.radius == 2) end
                 assert(entity.transform.x%8 == 4 and entity.transform.y%8 == 4)
                 signature = signature..entity.sprite_component.id..":"..entity.transform.x..","..entity.transform.y..";"
             end
@@ -212,13 +215,15 @@ end)
 test("throw, cooldown, fractional movement, ship launch, immutable UI", function()
     begin_level(2)
     local ship, before = Player_entity, #Entities
+    Current_throw_strength = Throw_strength_min
     frame({[0]=true,[2]=true})
-    assert(Current_throw_angle > 0 and Current_throw_strength > 1.5)
+    assert(Current_throw_angle > Active_level.angle and Current_throw_strength > Throw_strength_min)
+    assert(Current_throw_strength <= Throw_strength_max)
     frame({}, {[5]=true})
     assert(#Throw_inventory_ids == 0 and #Levels[2].inventory == 1 and not Thrown_self)
     assert(#Entities == before+2 and Player_entity == ship)
     local projectile = Entities[#Entities]
-    assert(projectile.physics_component.enabled and projectile.transform.x%1 ~= 0)
+    assert(projectile.physics_component and projectile.transform.x%1 ~= 0)
     frame({}, {[5]=true})
     assert(not Thrown_self, "cooldown ignored")
     frames(15)
@@ -228,7 +233,7 @@ test("throw, cooldown, fractional movement, ship launch, immutable UI", function
     assert(Ui_frame_start_loc[1] == x and Ui_frame_start_loc[2] == y)
     assert(projectile.transform.x == px and projectile.transform.y == py)
     frame({}, {[5]=true})
-    assert(Thrown_self and Player_entity == ship and ship.physics_component.enabled)
+    assert(Thrown_self and Player_entity == ship and ship.physics_component)
     local angle = Current_throw_angle
     frame({[0]=true})
     assert(Current_throw_angle == angle, "aim changed after launch")
@@ -266,9 +271,10 @@ test("gravity uses both full-size ring frames and stays centered", function()
         gameplay_draw()
         local found = false
         for _, call in ipairs(draws) do
-            if call[1] == "sspr" and call[6] == goal.transform.x-16 and call[7] == goal.transform.y-16 then
+            local radius = ring.circle_collider.radius
+            if call[1] == "sspr" and call[6] == goal.transform.x-radius and call[7] == goal.transform.y-radius then
                 assert(call[2] == (frame_index == 1 and 40 or 72) and call[3] == 0)
-                assert(call[4] == 32 and call[5] == 32 and call[8] == 32 and call[9] == 32)
+                assert(call[4] == 32 and call[5] == 32 and call[8] == radius*2 and call[9] == radius*2)
                 found = true
             end
         end
@@ -309,7 +315,7 @@ test("animation frames, non-loop hold, countdown removal and ownership", functio
     frames(2)
     assert(#Entities == count and effect.transform == nil and effect.sprite_component == nil)
     check_ownership()
-    local gravity = Player_entity.gravity_entity.animation_component
+    local gravity = find_tag("goal").gravity_entity.animation_component
     gravity.last_draw_time, gravity.transition_time, gravity.current_frame = time(),0,1
     frames(15)
     assert(gravity.current_frame == 2)
@@ -319,7 +325,7 @@ end)
 test("transition freezes physics and timers, tears down at full cover", function()
     begin_level(1)
     local ship = Player_entity
-    ship.physics_component.enabled,ship.physics_component.vel_x = true,0.5
+    attach_component(ship,"physics_component",{vel_x=0.5,vel_y=0},Physics_components)
     local effect = spawn_timed_animation(50,50,32,4,0.05,1)
     frame()
     local x,timer = ship.transform.x,effect.countdown_component.elapsed_frames
@@ -345,9 +351,8 @@ test("destroyed ship and goal restart and clean up their gravity", function()
         local victim = find_tag(tag)
         local aura = victim.gravity_entity
         local other = default_planet_spawn(victim.transform.x,victim.transform.y)
-        other.physics_component.enabled = true
         frame()
-        assert(Level_failed and victim.transform == nil and aura.transform == nil)
+        assert(Level_failed and victim.transform == nil and (not aura or aura.transform == nil))
         assert(not contains(Entities,victim) and not contains(Entities,aura))
         check_ownership()
         frames(8)
@@ -361,7 +366,7 @@ end)
 test("out-of-bounds ship restarts", function()
     begin_level(1)
     Player_entity.transform.x = 137
-    Player_entity.physics_component.enabled = true
+    attach_component(Player_entity,"physics_component",{vel_x=0,vel_y=0},Physics_components)
     frame()
     assert(Level_failed and Player_entity == nil)
     frames(8)
@@ -374,23 +379,136 @@ test("winning level 8 alone does not mark other levels complete", function()
     assert(Completed_levels[8] and not Completed_levels[1] and not Campaign_complete)
     assert(Transition_scene == "MainMenu" and Transition_level == nil)
 end)
+test("new map spawners have distinct artwork, complete components and animated frames", function()
+    local specs = {
+        {Id_black_hole_sprite,black_hole_spawn,1},
+        {Id_repulse_planet_sprite,repulse_planet_spawn,1},
+        {Id_red_nebula_sprite_base,red_nebula_spawn,Id_red_nebula_frames},
+        {Id_blue_nebula_sprite_base,blue_nebula_spawn,Id_blue_nebula_frames},
+        {Id_purple_nebula_sprite_base,purple_nebula_spawn,Id_purple_nebula_frames}
+    }
+    local ids = {}
+    for _, spec in ipairs(specs) do
+        local id, spawn, frame_count = spec[1],spec[2],spec[3]
+        assert(id > 0 and not ids[id] and Entity_spawn_handlers[id] == spawn)
+        ids[id] = true
+        local entity = spawn(64,64)
+        assert(entity and contains(Entities,entity) and entity.sprite_component.id == id)
+        assert(entity.transform.x == 64 and entity.transform.y == 64)
+        if entity.tag == "nebula" then
+            assert(entity.square_collider and entity.square_collider.filter)
+            assert(entity.animation_component.frames == 2 and entity.animation_component.looped)
+            assert(entity.animation_component.base_id == id)
+        end
+        for frame_index = 0,frame_count-1 do
+            local sprite, nonempty = id+frame_index,false
+            for y = 1,8 do
+                local pixels = gfx_rows[math.floor(sprite/16)*8+y]:sub(sprite%16*8+1,sprite%16*8+8)
+                if pixels:find("[1-f]") then nonempty = true end
+            end
+            assert(nonempty, "empty new animation frame")
+        end
+        local on_map = false
+        for _, level in ipairs(Levels) do
+            for y = level.map_loc[2],level.map_loc[2]+15 do
+                for x = level.map_loc[1],level.map_loc[1]+15 do
+                    if mget(x,y) == id then on_map = true end
+                end
+            end
+        end
+        assert(on_map, "new object missing from showcase levels")
+    end
+    check_ownership()
+end)
+test("nebula filters affect only their intended bodies and persist after contact", function()
+    local specs = {
+        {red_nebula_spawn,ship_spawn,true},
+        {red_nebula_spawn,default_planet_spawn,false},
+        {blue_nebula_spawn,ship_spawn,false},
+        {blue_nebula_spawn,default_planet_spawn,true},
+        {blue_nebula_spawn,goal_planet_spawn,false},
+        {purple_nebula_spawn,ship_spawn,true},
+        {purple_nebula_spawn,default_planet_spawn,true},
+        {purple_nebula_spawn,goal_planet_spawn,true}
+    }
+    for _, spec in ipairs(specs) do
+        for _, reverse in ipairs({false,true}) do
+            gameplay_teardown()
+            Level_failed = false
+            local cloud = spec[1](64,64)
+            local body = spec[2](64,64)
+            if not body.physics_component then
+                attach_component(body,"physics_component",{vel_x=0,vel_y=0},Physics_components)
+            end
+            local filter_calls = 0
+            local actual_filter = cloud.square_collider.filter
+            cloud.square_collider.filter = function(tag)
+                filter_calls = filter_calls+1
+                return actual_filter(tag)
+            end
+            if reverse then
+                -- Put the filter on the circle too, to verify both shape sides.
+                body.circle_collider.filter = function(tag) return tag == "nebula" end
+            end
+            game_systems_update()
+            assert(filter_calls > 0)
+            assert((body.transform == nil) == spec[3], "wrong body passed/died in nebula")
+            assert(contains(Entities,cloud) and cloud.sprite_component)
+            assert(#cloud.collisions == 0, "cloud retained destroyed or excluded contact")
+            check_ownership()
+        end
+    end
+end)
+test("repulsion pushes away, black holes attract and survive impacts", function()
+    for _, spawn in ipairs({repulse_planet_spawn,black_hole_spawn}) do
+        gameplay_teardown()
+        local source = spawn(64,64)
+        local ship = ship_spawn(80,64)
+        local physics = attach_component(ship,"physics_component",{vel_x=0,vel_y=0},Physics_components)
+        game_systems_update()
+        if spawn == repulse_planet_spawn then
+            assert(physics.vel_x > 0)
+            assert(source.gravity_entity.animation_component.base_id == Id_repulsive_gravity_sprite)
+            local sprite = source.gravity_entity.sprite_component
+            assert(sprite.source_width == 32 and sprite.source_height == 32)
+        else
+            assert(physics.vel_x < 0)
+            ship.transform.x,ship.transform.y = 64,64
+            game_systems_update()
+            assert(Level_failed and Player_entity == nil)
+            assert(contains(Entities,source) and source.transform and source.gravity_entity)
+        end
+        assert(not source.physics_component, "fixed gravity source drifted")
+    end
+end)
+test("stationary nebula contacts dispatch without physics components", function()
+    for _, spec in ipairs({{red_nebula_spawn,ship_spawn},{blue_nebula_spawn,repulse_planet_spawn}}) do
+        gameplay_teardown()
+        Level_failed = false
+        local cloud = spec[1](64,64)
+        local body = spec[2](64,64)
+        assert(not cloud.physics_component and not body.physics_component)
+        game_systems_update()
+        assert(body.transform == nil and contains(Entities,cloud))
+        check_ownership()
+    end
+end)
 test("all eight levels are playable through throwing and ship flight", function()
     Completed_levels, Campaign_complete, Latest_level = {},false,0
     for index = 1,#Levels do
         begin_level(index)
-        -- Levels 2, 5 and 6 teach aiming around obstacles; discard the practice
-        -- moon upward. The other levels let moons clear the straight path.
-        if index == 2 or index == 5 or index == 6 then Current_throw_angle = 0.25 end
+        -- Send moons through red, into blue/purple, then follow the safe ship aim.
+        if index == 2 or index == 4 then Current_throw_angle = 0 end
         while #Throw_inventory_ids > 0 do
             frame({}, {[5]=true})
-            frames(60)
+            frames(120)
             assert(not Level_failed and Transition_state == "idle", "moon failed level "..index)
         end
         local ship = Player_entity
         Current_throw_angle = Active_level.angle
         frame({}, {[5]=true})
         assert(Thrown_self)
-        for _ = 1,150 do
+        for _ = 1,300 do
             if Transition_state ~= "idle" then break end
             frame()
         end

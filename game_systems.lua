@@ -6,17 +6,17 @@ Gameplay_loc = {48, 0}
 Id_ship_sprite = 16
 Id_goal_planet_sprite = 17
 Id_default_planet_sprite = 18
-Id_black_hole_sprite = 0 -- To do 
+Id_black_hole_sprite = 80
 Id_default_gravity_sprite = 5
-Id_repulsive_gravity_sprit = 0 -- To do
+Id_repulsive_gravity_sprite = 72
 Id_destruct_base_sprite = 32
-Id_repulse_planet_sprite = 0 -- To do 
-Id_purple_nebula_sprite_base = 0
-Id_purple_nebula_frames = 0
-Id_blue_nebula_sprite_base = 0
-Id_blue_nebula_frames = 0
-Id_red_nebula_sprite_base = 0
-Id_red_nebula_frames = 0
+Id_repulse_planet_sprite = 81
+Id_purple_nebula_sprite_base = 86
+Id_purple_nebula_frames = 2
+Id_blue_nebula_sprite_base = 84
+Id_blue_nebula_frames = 2
+Id_red_nebula_sprite_base = 82
+Id_red_nebula_frames = 2
 
 Player_entity = nil
 Active_level = nil
@@ -186,13 +186,14 @@ function default_planet_spawn(x, y)
 end 
 
 function repulse_planet_spawn(x, y)
-    local entity = base_planet_spawn(x, y, Id_repulse_planet_sprite, Id_repulse_planet_sprite, 4, 24, -0.10, false)
+    local entity = base_planet_spawn(x, y, Id_repulse_planet_sprite, Id_repulsive_gravity_sprite, 4, 24, -0.10, false)
     entity.collided = regular_collision
     return entity
 end
 
 function black_hole_spawn(x, y)
     local entity = base_planet_spawn(x, y, Id_black_hole_sprite, Id_default_gravity_sprite, 4, 24, 0.10, false)
+    entity.tag = "black_hole"
     return entity
 end 
 
@@ -261,50 +262,31 @@ local function ship_filter(tag)
     return tag == "ship"
 end
 
-function red_nebula_spawn(x,y )
-    local transform = {x = x, y = y}
-    local nebula_entity =  {transform=transform, collisions={}}
+local function body_filter(tag)
+    return tag == "ship" or tag == "planet" or tag == "goal"
+end
 
-    add(Entities, nebula_entity)
-    attach_component(nebula_entity, "square_collider", {width=8, height=8, filter=ship_filter}, Square_colliders)
-    attach_component(nebula_entity, "animation_component", {
-        base_id = Id_red_nebula_sprite_base,
-        frames = Id_red_nebula_frames,
-        transition_delay = 0.5,
-        transition_time = 0,
-        looped = true
-    }, Animation_components)
-end 
+local function nebula_spawn(x, y, sprite, frames, filter)
+    local entity = {transform={x=x,y=y}, collisions={}, tag="nebula"}
+    add(Entities, entity)
+    attach_component(entity, "square_collider", {width=8,height=8,filter=filter}, Square_colliders)
+    attach_component(entity, "sprite_component", {id=sprite,width=8,height=8}, Sprite_components)
+    attach_component(entity, "animation_component",
+        {base_id=sprite,frames=frames,transition_delay=0.5,transition_time=0,looped=true}, Animation_components)
+    return entity
+end
 
-function blue_nebula_spawn(x,y )
-    local transform = {x = x, y = y}
-    local nebula_entity =  {transform=transform, collisions={}}
+function red_nebula_spawn(x, y)
+    return nebula_spawn(x, y, Id_red_nebula_sprite_base, Id_red_nebula_frames, ship_filter)
+end
 
-    add(Entities, nebula_entity)
-    attach_component(nebula_entity, "square_collider", {width=8, height=8, filter=planet_filter}, Square_colliders)
-    attach_component(nebula_entity, "animation_component", {
-        base_id = Id_blue_nebula_frames,
-        frames = Id_blue_nebula_frames,
-        transition_delay = 0.5,
-        transition_time = 0,
-        looped = true
-    }, Animation_components)
-end 
+function blue_nebula_spawn(x, y)
+    return nebula_spawn(x, y, Id_blue_nebula_sprite_base, Id_blue_nebula_frames, planet_filter)
+end
 
-function purple_nebula_spawn(x,y )
-    local transform = {x = x, y = y}
-    local nebula_entity =  {transform=transform, collisions={}}
-
-    add(Entities, nebula_entity)
-    attach_component(nebula_entity, "square_collider", {width=8, height=8}, Square_colliders)
-    attach_component(nebula_entity, "animation_component", {
-        base_id = Id_purple_nebula_sprite_base,
-        frames = Id_purple_nebula_frames,
-        transition_delay = 0.5,
-        transition_time = 0,
-        looped = true
-    }, Animation_components)
-end 
+function purple_nebula_spawn(x, y)
+    return nebula_spawn(x, y, Id_purple_nebula_sprite_base, Id_purple_nebula_frames, body_filter)
+end
 
 function ship_spawn(x, y)
     -- Set up base entity
@@ -330,7 +312,7 @@ Entity_spawn_handlers = {
     [Id_repulse_planet_sprite] = repulse_planet_spawn,
     [Id_red_nebula_sprite_base] = red_nebula_spawn,
     [Id_blue_nebula_sprite_base] = blue_nebula_spawn,
-    [Id_purple_nebula_frames] = purple_nebula_spawn
+    [Id_purple_nebula_sprite_base] = purple_nebula_spawn
 }
 
 local function map_spawn_handler(spawner)
@@ -428,10 +410,9 @@ local function check_collisions()
     for i = 1, #shapes - 1 do
         for j = i + 1, #shapes do
             local a, b = shapes[i], shapes[j]
-            a_filters_out = a.entity.filter ~= nil and ~a.entity.filter(b.tag)
-            b_filters_out = b.entity.filter ~= nil and ~b.entity.filter(a.tag)
-            filtered_out = a_filters_out or b_filters_out
-            if ~filtered_out and a.entity ~= b.entity and shapes_overlap(a, b) then
+            local a_filters_out = a.shape.filter ~= nil and not a.shape.filter(b.entity.tag)
+            local b_filters_out = b.shape.filter ~= nil and not b.shape.filter(a.entity.tag)
+            if not a_filters_out and not b_filters_out and a.entity ~= b.entity and shapes_overlap(a, b) then
                 add_collision(a.entity, b.entity)
                 add_collision(b.entity, a.entity)
             end
@@ -439,7 +420,27 @@ local function check_collisions()
     end
 end
 
---- Determines objects are effected by velocity and gravity 
+-- Contacts belong to entities, including stationary hazards without physics.
+local function run_collision_callbacks()
+    local processed = {}
+    for _, entity in ipairs(Entities) do
+        processed[entity] = true
+        if not entity.gravity_component then
+            for _, other in ipairs(entity.collisions) do
+                if not processed[other] and not other.gravity_component
+                    and not entity.destroy_pending and not other.destroy_pending
+                    and entity.transform ~= other.transform then
+                    if entity.collided then entity:collided(other) end
+                    if Transition_state ~= "idle" then return end
+                    if other.collided then other:collided(entity) end
+                    if Transition_state ~= "idle" then return end
+                end
+            end
+        end
+    end
+end
+
+-- Physics applies gravity and velocity only; callbacks are dispatched above.
 local function run_physics() 
     for _, physics_component in ipairs(Physics_components) do
         local this_entity = physics_component.entity
@@ -462,20 +463,6 @@ local function run_physics()
 
                         physics_component.vel_x = physics_component.vel_x + accel_x
                         physics_component.vel_y = physics_component.vel_y + accel_y
-                    end
-                else
-                    if this_entity.collided then
-                        this_entity:collided(collided_entity)
-                    end
-                    if Transition_state ~= nil and Transition_state ~= "idle" then
-                        return
-                    end
-
-                    if collided_entity.collided then
-                        collided_entity:collided(this_entity)
-                    end
-                    if Transition_state ~= nil and Transition_state ~= "idle" then
-                        return
                     end
                 end
             end
@@ -538,7 +525,8 @@ function game_systems_update()
         return
     end
     check_collisions()
-    run_physics()
+    run_collision_callbacks()
+    if Transition_state == "idle" then run_physics() end
     destroy_pending_entities()
 end
 

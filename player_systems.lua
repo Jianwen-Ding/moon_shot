@@ -1,6 +1,6 @@
 -- Aim uses PICO-8 turns: 0 points right and 0.25 points up.
 Current_throw_angle = 0
-Current_throw_strength = 1.5
+Current_throw_strength = 1
 Current_throw_cooldown = 0
 Throw_inventory_ids = {}
 Throw_inventory_sprites = {}
@@ -23,7 +23,7 @@ Ui_selected_frame_sprite = 49
 
 function player_systems_init()
     Current_throw_angle = Active_level.angle or 0
-    Current_throw_strength = 1.5
+    Current_throw_strength = mid(Throw_strength_min, Active_level.strength or 1, Throw_strength_max)
     Current_throw_cooldown = 0
     Thrown_self = false
     Throw_inventory_ids = {}
@@ -65,7 +65,6 @@ function player_systems_update()
         if #Throw_inventory_ids == 0 then
             thrown_entity = Player_entity
             Thrown_self = true
-            attach_component(Player_entity, "physics_component", {vel_x=0, vel_y=0}, Physics_components)
         else
             local id = Throw_inventory_ids[1]
             local spawner = Entity_spawn_handlers[id]
@@ -77,6 +76,9 @@ function player_systems_update()
             deli(Throw_inventory_sprites, 1)
         end
         local physics = thrown_entity.physics_component
+        if not physics then
+            physics = attach_component(thrown_entity, "physics_component", {vel_x=0,vel_y=0}, Physics_components)
+        end
         physics.vel_x = dx*Current_throw_strength
         physics.vel_y = dy*Current_throw_strength
         Current_throw_cooldown = Throw_cooldown
@@ -86,6 +88,7 @@ end
 function player_systems_draw()
     print("level "..Current_level.."  "..Active_level.name, 4, 4, 7)
     print("arrows: aim/power  z: menu", 4, 13, 6)
+    if Active_level.hint then print(Active_level.hint, 4, 22, 6) end
 
     if not Thrown_self and not Level_failed and Player_entity and Player_entity.transform then
         local pos = Player_entity.transform
