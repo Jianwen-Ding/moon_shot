@@ -13,6 +13,14 @@ cartridge. See the [PICO-8 manual](https://www.lexaloffle.com/dl/docs/pico-8_man
 
 - Left/right adjusts aim; up/down adjusts throwing power.
 - X throws the next moon. Once the inventory is empty, X launches the ship.
+- Yellow guide dots preview the next throw using current gravity fields and
+  planet drag. The preview stops at the screen edge or on contact with the goal.
+  It holds other objects still and ignores other solid/nebula collisions, so it
+  is an approximate route. It hides after the ship launches.
+  In `player_systems.lua`, `Guide_Time` sets the number of simulated updates
+  (currently 120), `Guide_Sprite_Step` sets marker spacing in updates (10), and
+  `Guide_Sprite_Base` selects the marker sprite (1). `Planet_drag` in
+  `game_systems.lua` controls drag for both live planets and their previews.
 - Tap Z to restart the current level (on release). Hold Z for one second to
   return to the main menu, which has eight levels in a 4×2 grid. Release Z
   before pressing it again in the menu to return to the title screen.

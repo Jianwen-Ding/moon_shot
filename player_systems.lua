@@ -12,7 +12,7 @@ local z_hold_started_at = nil
 local z_hold_triggered = false
 
 Throw_cooldown = 15
-Throw_angle_speed = 0.01
+Throw_angle_speed = 0.005
 Throw_strength_speed = 0.1
 Throw_angle_min = -0.375
 Throw_angle_max = 0.375
@@ -24,6 +24,27 @@ Ui_frame_offset = {0, 0}
 Ui_frame_dist_apart = 12
 Ui_frame_sprite = 48
 Ui_selected_frame_sprite = 49
+
+-- Gravity-only preview: time and marker spacing are measured in updates.
+Guide_Sprite_Base = 1
+Guide_Sprite_Step = 10
+Guide_Time = 120
+
+local function guide_finished(x, y, radius)
+    if x < 0 or x >= 128 or y < 0 or y >= 128 then return true end
+    for _, collider in ipairs(Circle_colliders) do
+        local entity = collider.entity
+        if entity.tag == "goal" and entity.transform and not entity.destroy_pending then
+            local dx, dy = x-entity.transform.x, y-entity.transform.y
+            local range = radius+collider.radius
+            if abs(dx) <= range and abs(dy) <= range
+                and dx*dx+dy*dy <= range*range then
+                return true
+            end
+        end
+    end
+    return false
+end
 
 function player_systems_init()
     -- Preserve a held Z across an automatic level restart or progression.
@@ -112,13 +133,6 @@ function player_systems_draw()
     print("z: restart  hold z: menu", 4, 122, 6)
     if Active_level.hint then print(Active_level.hint, 4, 22, 6) end
 
-    if not Thrown_self and not Level_failed and Player_entity and Player_entity.transform then
-        local pos = Player_entity.transform
-        local dx, dy = cos(Current_throw_angle), sin(Current_throw_angle)
-        local length = 12 + Current_throw_strength*5
-        line(flr(pos.x+dx*6), flr(pos.y+dy*6), flr(pos.x+dx*length), flr(pos.y+dy*length), 10)
-    end
-
     local start_x, start_y = Ui_frame_start_loc[1], Ui_frame_start_loc[2]
     -- The ship is the final inventory item, after all available moons.
     local count = #Throw_inventory_ids + (Thrown_self and 0 or 1)
@@ -138,5 +152,65 @@ function player_systems_draw()
         rect(82, 113, 121, 118, 6)
         local power = (Current_throw_strength-Throw_strength_min)/(Throw_strength_max-Throw_strength_min)
         rectfill(83, 114, 83+flr(power*37), 117, 10)
+    end
+
+    if not Thrown_self and not Level_failed and Player_entity and Player_entity.transform then
+        local dx, dy = cos(Current_throw_angle), sin(Current_throw_angle)
+        local throwing_ship = #Throw_inventory_ids == 0
+        local launch_offset = throwing_ship and 0 or 10
+        local iter_x = Player_entity.transform.x + dx*launch_offset
+        local iter_y = Player_entity.transform.y + dy*launch_offset
+        local iter_vel_x, iter_vel_y = dx*Current_throw_strength, dy*Current_throw_strength
+        local radius = throwing_ship and Player_entity.circle_collider.radius or 2
+        local tag = throwing_ship and "ship" or "planet"
+        local drag = nil
+        local next_id = Throw_inventory_ids[1]
+        if next_id == Id_default_planet_sprite or next_id == Id_goal_planet_sprite then
+            drag = Planet_drag
+        elseif throwing_ship and Player_entity.physics_component then
+            drag = Player_entity.physics_component.drag
+        end
+        local sprite_step = max(1, flr(Guide_Sprite_Step))
+        for i = 1,max(0, flr(Guide_Time)) do
+            if guide_finished(iter_x, iter_y, radius) then break end
+            -- Read current field positions; never spawn or move live entities.
+            local under_pull = false
+            for _, gravity in ipairs(Gravity_components) do
+                local field = gravity.entity
+                local shape = field.circle_collider
+                if shape and field.transform and not field.destroy_pending
+                    and not (throwing_ship and field.transform == Player_entity.transform)
+                    and (not shape.filter or shape.filter(tag)) then
+                    local diff_x = field.transform.x - iter_x
+                    local diff_y = field.transform.y - iter_y
+                    local range = shape.radius + radius
+                    -- Bound distances before squaring for PICO-8 fixed-point math.
+                    if abs(diff_x) <= range and abs(diff_y) <= range then
+                        local distance = sqrt(diff_x*diff_x + diff_y*diff_y)
+                        if distance > 0 and distance <= range then
+                            under_pull = true
+                            iter_vel_x = iter_vel_x + diff_x/distance*gravity.force
+                            iter_vel_y = iter_vel_y + diff_y/distance*gravity.force
+                        end
+                    end
+                end
+            end
+
+            -- Match the live speed cap and drag; keep positions fractional.
+            local speed = sqrt(iter_vel_x*iter_vel_x + iter_vel_y*iter_vel_y)
+            if speed > 0 then
+                local new_speed = min(5, speed)
+                if drag and not under_pull then new_speed = new_speed*drag end
+                iter_vel_x = iter_vel_x/speed*new_speed
+                iter_vel_y = iter_vel_y/speed*new_speed
+            end
+            iter_x = iter_x + iter_vel_x
+            iter_y = iter_y + iter_vel_y
+            if guide_finished(iter_x, iter_y, radius) then break end
+
+            if i % sprite_step == 0 then
+                spr(Guide_Sprite_Base, flr(iter_x-4), flr(iter_y-4))
+            end
+        end
     end
 end

@@ -22,6 +22,7 @@ Id_red_nebula_frames = 3
 Player_entity = nil
 Active_level = nil
 Level_failed = false
+Planet_drag = 0.98
 
 
 -- Holds entities and their attached components, including position transforms.
@@ -188,19 +189,19 @@ function default_planet_spawn(x, y)
 end 
 
 function repulse_planet_spawn(x, y)
-    local entity = base_planet_spawn(x, y, Id_repulse_planet_sprite, Id_repulsive_gravity_sprite, 4, 24, -0.10, false)
+    local entity = base_planet_spawn(x, y, Id_repulse_planet_sprite, Id_repulsive_gravity_sprite, 4, 24, -0.05, true)
     entity.collided = regular_collision
     return entity
 end
 
 function black_hole_spawn(x, y)
-    local entity = base_planet_spawn(x, y, Id_black_hole_sprite, Id_default_gravity_sprite, 4, 24, 0.10, false)
+    local entity = base_planet_spawn(x, y, Id_black_hole_sprite, Id_default_gravity_sprite, 4, 24, 0.15, false)
     entity.tag = "black_hole"
     return entity
 end 
 
 function goal_planet_spawn(x, y)
-    local entity = base_planet_spawn(x, y, Id_goal_planet_sprite, Id_default_gravity_sprite, 4, 16, 0.20, true)
+    local entity = base_planet_spawn(x, y, Id_goal_planet_sprite, Id_default_gravity_sprite, 7, 16, 0.10, false)
     entity.tag = "goal"
     entity.collided = goal_planet_collision
     return entity
@@ -231,7 +232,7 @@ base_planet_spawn = function(x, y, sprite, gravity_sprite, size, range, force, p
     attach_component(base_entity, "circle_collider", {radius=size/2}, Circle_colliders)
     attach_component(base_entity, "sprite_component", {id=sprite, width=8, height=8}, Sprite_components)
     if physics_enabled then
-        attach_component(base_entity, "physics_component", {vel_x=0, vel_y=0, drag=0.98}, Physics_components)
+        attach_component(base_entity, "physics_component", {vel_x=0, vel_y=0, drag=Planet_drag}, Physics_components)
     end
 
     add(Entities, base_entity)

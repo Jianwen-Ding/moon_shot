@@ -534,6 +534,132 @@ test("held Z survives automatic death restart and still reaches main menu", func
     for _ = 1,20 do frame({[4]=true},{[4]=true}) end
     assert(Scene == "MainMenu" and Transition_state == "idle")
 end)
+test("guide matches gravity-only ship motion without changing live entities", function()
+    begin_level(1)
+    gameplay_teardown()
+    Active_level = Levels[1]
+    local ship = ship_spawn(20.25,64.75)
+    local source = black_hole_spawn(52,44)
+    repulse_planet_spawn(68,88)
+    Current_throw_angle, Current_throw_strength = 0,0.75
+    Throw_inventory_ids, Throw_inventory_sprites = {},{}
+    Guide_Time, Guide_Sprite_Step = 30,5
+    local before_entities, before_physics = #Entities,#Physics_components
+    local x,y = ship.transform.x,ship.transform.y
+    draws = {}
+    player_systems_draw()
+    local markers = {}
+    for _, call in ipairs(draws) do
+        if call[1] == "spr" and call[2] == Guide_Sprite_Base then add(markers,call) end
+    end
+    assert(#markers == 6)
+    assert(#Entities == before_entities and #Physics_components == before_physics)
+    assert(ship.transform.x == x and ship.transform.y == y and not ship.physics_component)
+    assert(source.transform.x == 52 and source.transform.y == 44 and #ship.collisions == 0)
+    attach_component(ship,"physics_component",{vel_x=0.75,vel_y=0},Physics_components)
+    for step = 1,30 do
+        game_systems_update()
+        assert(ship.transform, "test path hit a solid body")
+        if step%5 == 0 then
+            local marker = markers[step/5]
+            assert(marker[3] == flr(ship.transform.x-4) and marker[4] == flr(ship.transform.y-4), "guide diverged from physics")
+        end
+    end
+    assert(ship.transform.y < y, "gravity did not bend the guide")
+    Guide_Time = 60
+end)
+test("guide starts at moon launch offset, includes drag and hides after launch", function()
+    begin_level(1)
+    gameplay_teardown()
+    Active_level = Levels[1]
+    local ship = ship_spawn(20.25,64.75)
+    Current_throw_angle, Current_throw_strength = 0,0.75
+    Throw_inventory_ids, Throw_inventory_sprites = {Id_default_planet_sprite},{Id_default_planet_sprite}
+    Guide_Time, Guide_Sprite_Step = 30,5
+    draws = {}
+    player_systems_draw()
+    local markers = {}
+    for _, call in ipairs(draws) do
+        if call[1] == "spr" and call[2] == Guide_Sprite_Base then add(markers,call) end
+    end
+    local moon = default_planet_spawn(ship.transform.x+10,ship.transform.y)
+    moon.physics_component.vel_x = 0.75
+    for step = 1,30 do
+        game_systems_update()
+        if step%5 == 0 then
+            local marker = markers[step/5]
+            assert(marker[3] == flr(moon.transform.x-4) and marker[4] == flr(moon.transform.y-4), "moon guide ignored launch offset or drag")
+        end
+    end
+    for _, state in ipairs({"launched","failed","missing"}) do
+        Thrown_self, Level_failed = state == "launched",state == "failed"
+        if state == "missing" then Player_entity = nil end
+        draws = {}
+        player_systems_draw()
+        for _, call in ipairs(draws) do
+            assert(call[1] ~= "spr" or call[2] ~= Guide_Sprite_Base, "inactive guide still drawn")
+        end
+    end
+    Guide_Time = 60
+end)
+test("guide stops at each screen edge without drawing offscreen markers", function()
+    begin_level(1)
+    gameplay_teardown()
+    Active_level = Levels[1]
+    local ship = ship_spawn(64,64)
+    Current_throw_strength = 1
+    Throw_inventory_ids, Throw_inventory_sprites = {},{}
+    Guide_Time, Guide_Sprite_Step = 60,1
+    for _, edge in ipairs({{126,64,0},{1,64,0.5},{64,1,0.25},{64,126,-0.25}}) do
+        ship.transform.x,ship.transform.y,Current_throw_angle = edge[1],edge[2],edge[3]
+        draws = {}
+        player_systems_draw()
+        local count = 0
+        for _, call in ipairs(draws) do
+            if call[1] == "spr" and call[2] == Guide_Sprite_Base then
+                count = count+1
+                assert(call[3]+4 >= 0 and call[3]+4 < 128 and call[4]+4 >= 0 and call[4]+4 < 128)
+            end
+        end
+        assert(count == 1, "guide continued beyond screen edge")
+    end
+    Guide_Sprite_Step = 5
+end)
+test("guide stops at the goal collider for ship and moon without triggering a win", function()
+    for _, moon in ipairs({false,true}) do
+        begin_level(1)
+        gameplay_teardown()
+        Active_level = Levels[1]
+        local ship = ship_spawn(20,64)
+        local goal = goal_planet_spawn(48,64)
+        -- Isolate the stopping condition from acceleration.
+        goal.gravity_entity.gravity_component.force = 0
+        Throw_inventory_ids = moon and {Id_default_planet_sprite} or {}
+        Throw_inventory_sprites = Throw_inventory_ids
+        Current_throw_angle,Current_throw_strength = 0,1
+        Guide_Time,Guide_Sprite_Step = 60,1
+        draws = {}
+        player_systems_draw()
+        local count,last_x = 0,nil
+        for _, call in ipairs(draws) do
+            if call[1] == "spr" and call[2] == Guide_Sprite_Base then
+                count,last_x = count+1,call[3]+4
+                assert(last_x < 48-goal.circle_collider.radius-2, "guide passed into or through goal")
+            end
+        end
+        assert(count > 0 and count < 60 and last_x >= 42)
+        assert(Transition_state == "idle" and not Completed_levels[1] and not Level_failed)
+        assert(ship.transform.x == 20 and goal.transform.x == 48)
+        -- A launch already touching the goal should have no prediction dots.
+        ship.transform.x = moon and 38 or 48
+        draws = {}
+        player_systems_draw()
+        for _, call in ipairs(draws) do
+            assert(call[1] ~= "spr" or call[2] ~= Guide_Sprite_Base)
+        end
+    end
+    Guide_Sprite_Step = 5
+end)
 test("all eight levels are playable through throwing and ship flight", function()
     Completed_levels, Campaign_complete, Latest_level = {},false,0
     for index = 1,#Levels do
