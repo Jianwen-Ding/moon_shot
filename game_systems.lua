@@ -6,8 +6,18 @@ Gameplay_loc = {48, 0}
 Id_ship_sprite = 16
 Id_goal_planet_sprite = 17
 Id_default_planet_sprite = 18
+Id_black_hole_sprite = 0 -- To do 
 Id_default_gravity_sprite = 5
+Id_repulsive_gravity_sprit = 0 -- To do
 Id_destruct_base_sprite = 32
+Id_repulse_planet_sprite = 0 -- To do 
+Id_purple_nebula_sprite_base = 0
+Id_purple_nebula_frames = 0
+Id_blue_nebula_sprite_base = 0
+Id_blue_nebula_frames = 0
+Id_red_nebula_sprite_base = 0
+Id_red_nebula_frames = 0
+
 Player_entity = nil
 Active_level = nil
 Level_failed = false
@@ -126,7 +136,7 @@ end
 
 -- x/y are center coordinates in pixels; frames use consecutive sprite IDs.
 -- Defaults: four frames, 0.125 seconds per frame, then destroy after 0.5 seconds.
-function spawn_timed_animation(x, y, base_id, frames, transition_delay, duration)
+local function spawn_timed_animation(x, y, base_id, frames, transition_delay, duration)
     frames = max(1, flr(frames or 4))
     transition_delay = max(0, transition_delay or 0.125)
     duration = duration or frames * transition_delay
@@ -170,19 +180,30 @@ local base_planet_spawn
 
 -- Spawners take centered pixel coordinates; map handlers convert tile positions.
 function default_planet_spawn(x, y)
-    local entity = base_planet_spawn(x, y, Id_default_planet_sprite, Id_default_gravity_sprite, 6, 24, 0.15)
+    local entity = base_planet_spawn(x, y, Id_default_planet_sprite, Id_default_gravity_sprite, 4, 24, 0.10, true)
     entity.collided = regular_collision
     return entity
 end 
 
+function repulse_planet_spawn(x, y)
+    local entity = base_planet_spawn(x, y, Id_repulse_planet_sprite, Id_repulse_planet_sprite, 4, 24, -0.10, false)
+    entity.collided = regular_collision
+    return entity
+end
+
+function black_hole_spawn(x, y)
+    local entity = base_planet_spawn(x, y, Id_black_hole_sprite, Id_default_gravity_sprite, 4, 24, 0.10, false)
+    return entity
+end 
+
 function goal_planet_spawn(x, y)
-    local entity = base_planet_spawn(x, y, Id_goal_planet_sprite, Id_default_gravity_sprite, 6, 24, 0.15)
+    local entity = base_planet_spawn(x, y, Id_goal_planet_sprite, Id_default_gravity_sprite, 4, 24, 0.10, true)
     entity.tag = "goal"
     entity.collided = goal_planet_collision
     return entity
 end
 
-base_planet_spawn = function(x, y, sprite, gravity_sprite, size, range, force)
+base_planet_spawn = function(x, y, sprite, gravity_sprite, size, range, force, physics_enabled)
     local transform = {x=x, y=y}
 
     -- Set up gravity entity 
@@ -197,14 +218,19 @@ base_planet_spawn = function(x, y, sprite, gravity_sprite, size, range, force)
         {id=gravity_sprite, width=range*2, height=range*2, source_width=32, source_height=32}, Sprite_components)
 
     add(Entities, gravity_entity)
+    gravity_entity.tag = "gravity"
 
+    -- Set up base entity
     local base_entity = {transform=transform, collisions={}, gravity_entity=gravity_entity}
 
     attach_component(base_entity, "circle_collider", {radius=size/2}, Circle_colliders)
     attach_component(base_entity, "sprite_component", {id=sprite, width=8, height=8}, Sprite_components)
-    attach_component(base_entity, "physics_component", {vel_x=0, vel_y=0, enabled=false}, Physics_components)
+    if physics_enabled then
+        attach_component(base_entity, "physics_component", {vel_x=0, vel_y=0}, Physics_components)
+    end
 
     add(Entities, base_entity)
+    base_entity.tag = "planet"
 
     return base_entity
 end
@@ -227,18 +253,84 @@ local function goal_collision(entity, other)
     regular_collision(entity, other)
 end
 
+local function planet_filter(tag)
+    return tag == "planet"
+end
+
+local function ship_filter(tag)
+    return tag == "ship"
+end
+
+function red_nebula_spawn(x,y )
+    local transform = {x = x, y = y}
+    local nebula_entity =  {transform=transform, collisions={}}
+
+    add(Entities, nebula_entity)
+    attach_component(nebula_entity, "square_collider", {width=8, height=8, filter=ship_filter}, Square_colliders)
+    attach_component(nebula_entity, "animation_component", {
+        base_id = Id_red_nebula_sprite_base,
+        frames = Id_red_nebula_frames,
+        transition_delay = 0.5,
+        transition_time = 0,
+        looped = true
+    }, Animation_components)
+end 
+
+function blue_nebula_spawn(x,y )
+    local transform = {x = x, y = y}
+    local nebula_entity =  {transform=transform, collisions={}}
+
+    add(Entities, nebula_entity)
+    attach_component(nebula_entity, "square_collider", {width=8, height=8, filter=planet_filter}, Square_colliders)
+    attach_component(nebula_entity, "animation_component", {
+        base_id = Id_blue_nebula_frames,
+        frames = Id_blue_nebula_frames,
+        transition_delay = 0.5,
+        transition_time = 0,
+        looped = true
+    }, Animation_components)
+end 
+
+function purple_nebula_spawn(x,y )
+    local transform = {x = x, y = y}
+    local nebula_entity =  {transform=transform, collisions={}}
+
+    add(Entities, nebula_entity)
+    attach_component(nebula_entity, "square_collider", {width=8, height=8}, Square_colliders)
+    attach_component(nebula_entity, "animation_component", {
+        base_id = Id_purple_nebula_sprite_base,
+        frames = Id_purple_nebula_frames,
+        transition_delay = 0.5,
+        transition_time = 0,
+        looped = true
+    }, Animation_components)
+end 
+
 function ship_spawn(x, y)
-    local entity = base_planet_spawn(x, y, Id_ship_sprite, Id_default_gravity_sprite, 8, 16, 0)
-    entity.tag = "ship"
-    entity.collided = goal_collision
-    Player_entity = entity
-    return entity
+    -- Set up base entity
+    local transform = {x = x, y = y}
+
+    local ship_entity =  {transform=transform, collisions={}}
+    
+    add(Entities, ship_entity)
+
+    attach_component(ship_entity, "circle_collider", {radius=2}, Circle_colliders)
+    attach_component(ship_entity, "sprite_component", {id=Id_ship_sprite, width=8, height=8}, Sprite_components)
+    ship_entity.tag = "ship"
+    ship_entity.collided = goal_collision
+    Player_entity = ship_entity
+    return ship_entity
 end
 
 Entity_spawn_handlers = {
     [Id_default_planet_sprite] = default_planet_spawn,
     [Id_goal_planet_sprite] = goal_planet_spawn,
-    [Id_ship_sprite] = ship_spawn
+    [Id_ship_sprite] = ship_spawn,
+    [Id_black_hole_sprite] = black_hole_spawn,
+    [Id_repulse_planet_sprite] = repulse_planet_spawn,
+    [Id_red_nebula_sprite_base] = red_nebula_spawn,
+    [Id_blue_nebula_sprite_base] = blue_nebula_spawn,
+    [Id_purple_nebula_frames] = purple_nebula_spawn
 }
 
 local function map_spawn_handler(spawner)
@@ -336,7 +428,10 @@ local function check_collisions()
     for i = 1, #shapes - 1 do
         for j = i + 1, #shapes do
             local a, b = shapes[i], shapes[j]
-            if a.entity ~= b.entity and shapes_overlap(a, b) then
+            a_filters_out = a.entity.filter ~= nil and ~a.entity.filter(b.tag)
+            b_filters_out = b.entity.filter ~= nil and ~b.entity.filter(a.tag)
+            filtered_out = a_filters_out or b_filters_out
+            if ~filtered_out and a.entity ~= b.entity and shapes_overlap(a, b) then
                 add_collision(a.entity, b.entity)
                 add_collision(b.entity, a.entity)
             end
@@ -348,54 +443,52 @@ end
 local function run_physics() 
     for _, physics_component in ipairs(Physics_components) do
         local this_entity = physics_component.entity
-        if physics_component.enabled ~= false then
-            for _, collided_entity in ipairs(this_entity.collisions) do
-                if not this_entity.destroy_pending and not collided_entity.destroy_pending
-                    and collided_entity.transform ~= this_entity.transform then
-                    -- Follow the gravity component attached to the other entity.
-                    if collided_entity.gravity_component ~= nil then
-                        local diff_x = collided_entity.transform.x - this_entity.transform.x
-                        local diff_y = collided_entity.transform.y - this_entity.transform.y
+        for _, collided_entity in ipairs(this_entity.collisions) do
+            if not this_entity.destroy_pending and not collided_entity.destroy_pending
+                and collided_entity.transform ~= this_entity.transform then
+                -- Follow the gravity component attached to the other entity.
+                if collided_entity.gravity_component ~= nil then
+                    local diff_x = collided_entity.transform.x - this_entity.transform.x
+                    local diff_y = collided_entity.transform.y - this_entity.transform.y
 
-                        -- normalization of diff
-                        local magnitude = sqrt(diff_x * diff_x + diff_y * diff_y)
-                        if magnitude > 0 then
-                            diff_x = diff_x / magnitude
-                            diff_y = diff_y / magnitude
+                    -- normalization of diff
+                    local magnitude = sqrt(diff_x * diff_x + diff_y * diff_y)
+                    if magnitude > 0 then
+                        diff_x = diff_x / magnitude
+                        diff_y = diff_y / magnitude
 
-                            local accel_x = diff_x * collided_entity.gravity_component.force
-                            local accel_y = diff_y * collided_entity.gravity_component.force
+                        local accel_x = diff_x * collided_entity.gravity_component.force
+                        local accel_y = diff_y * collided_entity.gravity_component.force
 
-                            physics_component.vel_x = physics_component.vel_x + accel_x
-                            physics_component.vel_y = physics_component.vel_y + accel_y
-                        end
-                    else
-                        if this_entity.collided then
-                            this_entity:collided(collided_entity)
-                        end
-                        if Transition_state ~= nil and Transition_state ~= "idle" then
-                            return
-                        end
+                        physics_component.vel_x = physics_component.vel_x + accel_x
+                        physics_component.vel_y = physics_component.vel_y + accel_y
+                    end
+                else
+                    if this_entity.collided then
+                        this_entity:collided(collided_entity)
+                    end
+                    if Transition_state ~= nil and Transition_state ~= "idle" then
+                        return
+                    end
 
-                        if collided_entity.collided then
-                            collided_entity:collided(this_entity)
-                        end
-                        if Transition_state ~= nil and Transition_state ~= "idle" then
-                            return
-                        end
+                    if collided_entity.collided then
+                        collided_entity:collided(this_entity)
+                    end
+                    if Transition_state ~= nil and Transition_state ~= "idle" then
+                        return
                     end
                 end
             end
+        end
 
-            if not this_entity.destroy_pending then
-                physics_component.vel_x = mid(-3, physics_component.vel_x, 3)
-                physics_component.vel_y = mid(-3, physics_component.vel_y, 3)
-                this_entity.transform.x = this_entity.transform.x + physics_component.vel_x
-                this_entity.transform.y = this_entity.transform.y + physics_component.vel_y
-                local pos = this_entity.transform
-                if pos.x < -8 or pos.x > 136 or pos.y < -8 or pos.y > 136 then
-                    regular_collision(this_entity)
-                end
+        if not this_entity.destroy_pending then
+            physics_component.vel_x = mid(-3, physics_component.vel_x, 3)
+            physics_component.vel_y = mid(-3, physics_component.vel_y, 3)
+            this_entity.transform.x = this_entity.transform.x + physics_component.vel_x
+            this_entity.transform.y = this_entity.transform.y + physics_component.vel_y
+            local pos = this_entity.transform
+            if pos.x < -8 or pos.x > 136 or pos.y < -8 or pos.y > 136 then
+                regular_collision(this_entity)
             end
         end
     end

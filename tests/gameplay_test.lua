@@ -66,6 +66,7 @@ end)
 assert(load(lua_code,"@moon_shot.p8"))()
 local passed = 0
 local function test(name, fn)
+    if arg[1] and not name:find(arg[1],1,true) then return end
     fn()
     passed = passed+1
     host_print("ok - "..name)
@@ -105,6 +106,50 @@ local function check_ownership()
         for _, contact in ipairs(entity.collisions) do assert(contains(Entities,contact), "stale collision") end
     end
 end
+test("ship spawn registers and draws its centered artwork at native size", function()
+    gameplay_teardown()
+    Transition_state = "idle"
+    local ship = ship_spawn(20.5,76.25)
+    assert(contains(Entities,ship), "ship missing from Entities")
+    assert(Player_entity == ship and ship.gravity_entity == nil)
+    assert(ship.transform.x == 20.5 and ship.transform.y == 76.25, "spawn offset applied twice")
+    assert(ship.circle_collider.radius == 2, "small ship collider changed")
+    assert(contains(Sprite_components,ship.sprite_component))
+    assert(ship.sprite_component.entity == ship)
+    draws = {}
+    gameplay_draw()
+    local rendered = false
+    for _, call in ipairs(draws) do
+        if call[1] == "spr" and call[2] == Id_ship_sprite then
+            assert(call[3] == 16 and call[4] == 72)
+            rendered = true
+        end
+    end
+    assert(rendered, "ship tile must render without shrinking its small artwork")
+    assert(ship.transform.x == 20.5 and ship.transform.y == 76.25)
+    check_ownership()
+end)
+test("ship collisions trigger goal progression and obstacle restart", function()
+    for _, target_kind in ipairs({"goal","obstacle"}) do
+        gameplay_teardown()
+        Transition_state, Scene, Current_level, Level_failed = "idle","Gameplay",1,false
+        local ship = ship_spawn(64,64)
+        local target_spawn = target_kind == "goal" and goal_planet_spawn or default_planet_spawn
+        local target = target_spawn(ship.transform.x,ship.transform.y)
+        game_systems_update()
+        if target_kind == "goal" then
+            assert(contains(ship.collisions,target), "ship did not detect goal")
+            assert(contains(target.collisions,ship), "goal did not detect ship")
+            assert(Transition_state == "covering" and Transition_level == 2)
+        else
+            assert(Level_failed, "ship collision did not trigger failure")
+            assert(Player_entity == nil and not contains(Entities,ship))
+            assert(ship.circle_collider == nil and ship.sprite_component == nil)
+            for _ = 1,8 do game_systems_update() end
+            assert(Transition_state == "covering" and Transition_level == 1)
+        end
+    end
+end)
 test("idle title and button-driven menu", function()
     _init()
     frames(3)

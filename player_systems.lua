@@ -8,12 +8,12 @@ Throw_inventory_level_ids = {}
 Thrown_self = false
 
 Throw_cooldown = 15
-Throw_angle_speed = 0.005
-Throw_strength_speed = 0.05
+Throw_angle_speed = 0.01
+Throw_strength_speed = 0.1
 Throw_angle_min = -0.375
 Throw_angle_max = 0.375
-Throw_strength_min = 0.5
-Throw_strength_max = 3
+Throw_strength_min = 0.25
+Throw_strength_max = 1
 
 Ui_frame_start_loc = {8, 112}
 Ui_frame_offset = {0, 0}
@@ -65,6 +65,7 @@ function player_systems_update()
         if #Throw_inventory_ids == 0 then
             thrown_entity = Player_entity
             Thrown_self = true
+            attach_component(Player_entity, "physics_component", {vel_x=0, vel_y=0}, Physics_components)
         else
             local id = Throw_inventory_ids[1]
             local spawner = Entity_spawn_handlers[id]
@@ -78,7 +79,6 @@ function player_systems_update()
         local physics = thrown_entity.physics_component
         physics.vel_x = dx*Current_throw_strength
         physics.vel_y = dy*Current_throw_strength
-        physics.enabled = true
         Current_throw_cooldown = Throw_cooldown
     end
 end
