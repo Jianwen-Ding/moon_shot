@@ -397,7 +397,7 @@ test("new map spawners have distinct artwork, complete components and animated f
         assert(entity.transform.x == 64 and entity.transform.y == 64)
         if entity.tag == "nebula" then
             assert(entity.square_collider and entity.square_collider.filter)
-            assert(entity.animation_component.frames == 2 and entity.animation_component.looped)
+            assert(entity.animation_component.frames == frame_count and entity.animation_component.looped)
             assert(entity.animation_component.base_id == id)
         end
         for frame_index = 0,frame_count-1 do
@@ -492,6 +492,47 @@ test("stationary nebula contacts dispatch without physics components", function(
         assert(body.transform == nil and contains(Entities,cloud))
         check_ownership()
     end
+end)
+test("short Z press restarts on release and blocks simultaneous throwing", function()
+    begin_level(3)
+    local ship = Player_entity
+    frame({[4]=true},{[4]=true,[5]=true})
+    assert(Transition_state == "idle" and #Throw_inventory_ids == 1)
+    for _ = 1,5 do frame({[4]=true},{[4]=true}) end
+    assert(Transition_state == "idle", "restart fired before release")
+    frame({}, {[5]=true})
+    assert(Transition_state == "covering" and Transition_scene == "Gameplay" and Transition_level == 3)
+    assert(#Throw_inventory_ids == 1, "throw was processed with restart")
+    frames(20)
+    assert(Current_level == 3 and Player_entity ~= ship and #Throw_inventory_ids == 1)
+    frames(3)
+    assert(Transition_state == "idle", "restart repeated after release")
+end)
+test("held Z returns to main menu without restarting or auto-exiting to title", function()
+    begin_level(1)
+    for _ = 1,30 do
+        frame({[4]=true},{[4]=true})
+        assert(Transition_state == "idle", "hold fired before one second")
+    end
+    -- Allow one update for rounding at the one-second boundary.
+    for _ = 1,2 do frame({[4]=true},{[4]=true}) end
+    assert(Transition_state == "covering" and Transition_scene == "MainMenu" and Transition_level == nil)
+    for _ = 1,40 do frame({[4]=true},{[4]=true}) end
+    assert(Scene == "MainMenu" and Transition_state == "idle", "held Z exited menu")
+    frame()
+    frame({[4]=true},{[4]=true})
+    assert(Transition_scene == "Title")
+end)
+test("held Z survives automatic death restart and still reaches main menu", function()
+    begin_level(1)
+    Player_entity.transform.x = 137
+    attach_component(Player_entity,"physics_component",{vel_x=0,vel_y=0},Physics_components)
+    frame({[4]=true},{[4]=true})
+    assert(Level_failed)
+    for _ = 1,31 do frame({[4]=true},{[4]=true}) end
+    assert(Transition_scene == "MainMenu", "automatic restart reset Z hold timer")
+    for _ = 1,20 do frame({[4]=true},{[4]=true}) end
+    assert(Scene == "MainMenu" and Transition_state == "idle")
 end)
 test("all eight levels are playable through throwing and ship flight", function()
     Completed_levels, Campaign_complete, Latest_level = {},false,0

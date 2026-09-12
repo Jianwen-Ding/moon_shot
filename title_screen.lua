@@ -1,7 +1,9 @@
 -- Map tile origin of the title's 16x16 region.
 Title_screen_sprite = {0, 0}
+local z_released = true
 
 function title_screen_init()
+    z_released = not btn(4)
 end
 
 function title_screen_teardown()
@@ -9,7 +11,9 @@ function title_screen_teardown()
 end
 
 function title_screen_update()
-    if btnp(4) or btnp(5) then
+    -- A Z held while returning here must not auto-repeat into the menu.
+    if not btn(4) then z_released = true end
+    if (z_released and btnp(4)) or btnp(5) then
         transition("MainMenu")
     end
 end

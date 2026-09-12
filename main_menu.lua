@@ -24,11 +24,13 @@ Main_menu_sprite_locs = {
 -- Coordinate pairs use [1] for x/column and [2] for y/row.
 Current_menu_loc = {1, 1}
 Menu_bounds = {4, 2}
+local z_released = true
 
 function init_level_selector() 
 end
 
 function main_menu_init()
+    z_released = not btn(4)
     local selected = mid(1, Current_level, #Levels)
     Current_menu_loc = {((selected-1)%Menu_bounds[1])+1, flr((selected-1)/Menu_bounds[1])+1}
 end
@@ -42,6 +44,8 @@ local function get_current_level()
 end
 
 function main_menu_update()
+    -- Ignore the Z hold that brought us here until the button is released.
+    if not btn(4) then z_released = true end
     if btnp(0) ~= btnp(1) then
         if btnp(0) then
             Current_menu_loc[1] = max(Current_menu_loc[1] - 1, 1)
@@ -58,7 +62,7 @@ function main_menu_update()
         end 
     end
 
-    if btnp(4) then
+    if z_released and btnp(4) then
         transition("Title")
         return
     end

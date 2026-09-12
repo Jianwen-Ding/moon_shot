@@ -7,6 +7,10 @@ Throw_inventory_sprites = {}
 Throw_inventory_level_ids = {}
 Thrown_self = false
 
+Restart_hold_duration = 1 -- seconds before a held Z returns to the main menu
+local z_hold_started_at = nil
+local z_hold_triggered = false
+
 Throw_cooldown = 15
 Throw_angle_speed = 0.01
 Throw_strength_speed = 0.1
@@ -22,6 +26,11 @@ Ui_frame_sprite = 48
 Ui_selected_frame_sprite = 49
 
 function player_systems_init()
+    -- Preserve a held Z across an automatic level restart or progression.
+    if not btn(4) then
+        z_hold_started_at = nil
+        z_hold_triggered = false
+    end
     Current_throw_angle = Active_level.angle or 0
     Current_throw_strength = mid(Throw_strength_min, Active_level.strength or 1, Throw_strength_max)
     Current_throw_cooldown = 0
@@ -41,9 +50,21 @@ end
 
 function player_systems_update()
     if Transition_state ~= "idle" then return end
-    if btnp(4) then
-        transition("MainMenu")
+    if btn(4) then
+        z_hold_started_at = z_hold_started_at or time()
+        if not z_hold_triggered and time()-z_hold_started_at >= Restart_hold_duration then
+            z_hold_triggered = true
+            transition("MainMenu")
+        end
         return
+    elseif z_hold_started_at then
+        local restart = not z_hold_triggered
+        z_hold_started_at = nil
+        z_hold_triggered = false
+        if restart then
+            transition("Gameplay", Current_level)
+            return
+        end
     end
     Current_throw_cooldown = max(0, Current_throw_cooldown-1)
     if Thrown_self or Level_failed or not Player_entity or not Player_entity.transform then return end
@@ -87,7 +108,8 @@ end
 
 function player_systems_draw()
     print("level "..Current_level.."  "..Active_level.name, 4, 4, 7)
-    print("arrows: aim/power  z: menu", 4, 13, 6)
+    print("arrows: aim/power", 4, 13, 6)
+    print("z: restart  hold z: menu", 4, 122, 6)
     if Active_level.hint then print(Active_level.hint, 4, 22, 6) end
 
     if not Thrown_self and not Level_failed and Player_entity and Player_entity.transform then

@@ -37,6 +37,7 @@ Entities = {}
 -- entity.collisions contains references to touching entities.
 Square_colliders = {}
 Circle_colliders = {}
+Gravity_colliders = {}
 Physics_components = {}
 Gravity_components = {}
 Sprite_components = {}
@@ -199,7 +200,7 @@ function black_hole_spawn(x, y)
 end 
 
 function goal_planet_spawn(x, y)
-    local entity = base_planet_spawn(x, y, Id_goal_planet_sprite, Id_default_gravity_sprite, 4, 24, 0.10, true)
+    local entity = base_planet_spawn(x, y, Id_goal_planet_sprite, Id_default_gravity_sprite, 4, 16, 0.20, true)
     entity.tag = "goal"
     entity.collided = goal_planet_collision
     return entity
@@ -211,7 +212,8 @@ base_planet_spawn = function(x, y, sprite, gravity_sprite, size, range, force, p
     -- Set up gravity entity 
     local gravity_entity = {transform=transform, collisions={}}
 
-    attach_component(gravity_entity, "circle_collider", {radius=range}, Circle_colliders)
+    gravity_collider = {radius=range}
+    attach_component(gravity_entity, "circle_collider", gravity_collider, Circle_colliders)
     attach_component(gravity_entity, "gravity_component", {force=force}, Gravity_components)
 
     attach_component(gravity_entity, "animation_component",
@@ -220,6 +222,7 @@ base_planet_spawn = function(x, y, sprite, gravity_sprite, size, range, force, p
         {id=gravity_sprite, width=range*2, height=range*2, source_width=32, source_height=32}, Sprite_components)
 
     add(Entities, gravity_entity)
+    add(Gravity_colliders, gravity_collider)
     gravity_entity.tag = "gravity"
 
     -- Set up base entity
@@ -228,7 +231,7 @@ base_planet_spawn = function(x, y, sprite, gravity_sprite, size, range, force, p
     attach_component(base_entity, "circle_collider", {radius=size/2}, Circle_colliders)
     attach_component(base_entity, "sprite_component", {id=sprite, width=8, height=8}, Sprite_components)
     if physics_enabled then
-        attach_component(base_entity, "physics_component", {vel_x=0, vel_y=0, drag=0.99}, Physics_components)
+        attach_component(base_entity, "physics_component", {vel_x=0, vel_y=0, drag=0.98}, Physics_components)
     end
 
     add(Entities, base_entity)
@@ -473,8 +476,10 @@ local function run_physics()
 
         if not this_entity.destroy_pending then
             local vel_mag = sqrt(physics_component.vel_x * physics_component.vel_x + physics_component.vel_y * physics_component.vel_y)
-            physics_component.vel_x = physics_component.vel_x / vel_mag
-            physics_component.vel_y = physics_component.vel_y / vel_mag
+            if vel_mag > 0 then
+                physics_component.vel_x = physics_component.vel_x / vel_mag
+                physics_component.vel_y = physics_component.vel_y / vel_mag
+            end
 
             local new_vel = mid(-5, vel_mag, 5)
             if physics_component.drag ~= nil and not under_pull then

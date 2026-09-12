@@ -13,7 +13,9 @@ cartridge. See the [PICO-8 manual](https://www.lexaloffle.com/dl/docs/pico-8_man
 
 - Left/right adjusts aim; up/down adjusts throwing power.
 - X throws the next moon. Once the inventory is empty, X launches the ship.
-- Z returns to the level menu. The menu has eight levels in a 4×2 grid.
+- Tap Z to restart the current level (on release). Hold Z for one second to
+  return to the main menu, which has eight levels in a 4×2 grid. Release Z
+  before pressing it again in the menu to return to the title screen.
 - Moons destroy obstacles on impact. Destroying the ship or goal, or sending
   the ship offscreen, restarts the current level after the explosion.
 - Landing on the green goal advances to the next level. Level 8 returns to the
