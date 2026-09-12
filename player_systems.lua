@@ -13,7 +13,7 @@ Throw_strength_speed = 0.1
 Throw_angle_min = -0.375
 Throw_angle_max = 0.375
 Throw_strength_min = 0.25
-Throw_strength_max = 1
+Throw_strength_max = 2
 
 Ui_frame_start_loc = {8, 112}
 Ui_frame_offset = {0, 0}

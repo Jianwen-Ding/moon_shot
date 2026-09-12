@@ -34,14 +34,19 @@ New placeholder objects use these map markers:
 | --- | --- | --- |
 | Black hole | 80 | Fixed attraction field; destroys incoming ships/moons and survives impacts. |
 | Repulsor planet | 81 | Fixed repulsion field; its solid core can be destroyed. |
-| Red nebula | 82–83 (place 82) | Destroys ships; moons pass through. |
-| Blue nebula | 84–85 (place 84) | Destroys ordinary/repulsor planets; ships and the goal pass through. |
-| Purple nebula | 86–87 (place 86) | Destroys ships, planets and the goal. |
+| Red nebula | 128–129 (place 128; row reserved through 143) | Destroys ships; moons pass through. |
+| Blue nebula | 144–145 (place 144; row reserved through 159) | Destroys ordinary/repulsor planets; ships and the goal pass through. |
+| Purple nebula | 160–161 (place 160; row reserved through 175) | Destroys ships, planets and the goal. |
 
 Nebulae persist after contact. Their collider `filter` receives the other
 entity's tag; both colliders must accept a contact. Repulsors use orange
-32×32 ring frames at 72 and 76. Existing artwork is preserved, and the new
-art stays in the upper half of the sprite sheet, outside shared map memory.
+32×32 ring frames at 72 and 76. Nebula animations have their own rows in the
+lower half of the sprite sheet, with room for 16 frames per color. Draw extra
+8×8 frames to the right and increase the corresponding `Id_red_nebula_frames`,
+`Id_blue_nebula_frames` or `Id_purple_nebula_frames` field in `game_systems.lua`.
+Keep map markers on the first frame. The lower sprite-sheet half shares memory
+with map rows 32–63; leave those map rows unused. All eight levels use map rows
+16–31, so their data does not overlap these animation rows.
 
 Levels 2–4 introduce red, blue and purple nebulae. Level 5 introduces repulsion,
 level 6 introduces black holes, level 7 mixes nebulae, and level 8 combines the

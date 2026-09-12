@@ -11,12 +11,13 @@ Id_default_gravity_sprite = 5
 Id_repulsive_gravity_sprite = 72
 Id_destruct_base_sprite = 32
 Id_repulse_planet_sprite = 81
-Id_purple_nebula_sprite_base = 86
-Id_purple_nebula_frames = 2
-Id_blue_nebula_sprite_base = 84
-Id_blue_nebula_frames = 2
-Id_red_nebula_sprite_base = 82
-Id_red_nebula_frames = 2
+-- Dedicated nebula rows: add frames to the right, then increase frames (up to 16).
+Id_purple_nebula_sprite_base = 160
+Id_purple_nebula_frames = 3
+Id_blue_nebula_sprite_base = 144
+Id_blue_nebula_frames = 3
+Id_red_nebula_sprite_base = 128
+Id_red_nebula_frames = 3
 
 Player_entity = nil
 Active_level = nil
@@ -227,7 +228,7 @@ base_planet_spawn = function(x, y, sprite, gravity_sprite, size, range, force, p
     attach_component(base_entity, "circle_collider", {radius=size/2}, Circle_colliders)
     attach_component(base_entity, "sprite_component", {id=sprite, width=8, height=8}, Sprite_components)
     if physics_enabled then
-        attach_component(base_entity, "physics_component", {vel_x=0, vel_y=0}, Physics_components)
+        attach_component(base_entity, "physics_component", {vel_x=0, vel_y=0, drag=0.99}, Physics_components)
     end
 
     add(Entities, base_entity)
@@ -443,6 +444,7 @@ end
 -- Physics applies gravity and velocity only; callbacks are dispatched above.
 local function run_physics() 
     for _, physics_component in ipairs(Physics_components) do
+        local under_pull = false
         local this_entity = physics_component.entity
         for _, collided_entity in ipairs(this_entity.collisions) do
             if not this_entity.destroy_pending and not collided_entity.destroy_pending
@@ -455,6 +457,7 @@ local function run_physics()
                     -- normalization of diff
                     local magnitude = sqrt(diff_x * diff_x + diff_y * diff_y)
                     if magnitude > 0 then
+                        under_pull = true
                         diff_x = diff_x / magnitude
                         diff_y = diff_y / magnitude
 
@@ -469,8 +472,17 @@ local function run_physics()
         end
 
         if not this_entity.destroy_pending then
-            physics_component.vel_x = mid(-3, physics_component.vel_x, 3)
-            physics_component.vel_y = mid(-3, physics_component.vel_y, 3)
+            local vel_mag = sqrt(physics_component.vel_x * physics_component.vel_x + physics_component.vel_y * physics_component.vel_y)
+            physics_component.vel_x = physics_component.vel_x / vel_mag
+            physics_component.vel_y = physics_component.vel_y / vel_mag
+
+            local new_vel = mid(-5, vel_mag, 5)
+            if physics_component.drag ~= nil and not under_pull then
+                new_vel = new_vel * physics_component.drag
+            end
+            physics_component.vel_x = physics_component.vel_x * new_vel
+            physics_component.vel_y = physics_component.vel_y * new_vel
+
             this_entity.transform.x = this_entity.transform.x + physics_component.vel_x
             this_entity.transform.y = this_entity.transform.y + physics_component.vel_y
             local pos = this_entity.transform
