@@ -2,10 +2,9 @@ Scene = "Title"
 Latest_level = 0
 Current_level = 0
 
--- Dispatch by the combined numeric sprite flags (0-255), not flag index.
+-- Dispatch by the sprite ID stored in each map cell.
 -- Bounds and callback coordinates are in map tiles. Defaults: base 128x32 map.
--- Example: scan_map({[3] = spawn_planet}, 0, 0, 16, 16)
--- spawn_planet receives (map_x, map_y, sprite, tag).
+-- Each handler receives map coordinates in tiles and the sprite ID.
 function scan_map(handlers, map_x, map_y, width, height)
     map_x = map_x or 0
     map_y = map_y or 0
@@ -17,9 +16,9 @@ function scan_map(handlers, map_x, map_y, width, height)
             local sprite = mget(x, y)
             -- Sprite 0 represents an empty map cell.
             if sprite ~= 0 then
-                handler = handlers[sprite]
+                local handler = handlers[sprite]
                 if handler then
-                    handler(x, y)
+                    handler(x, y, sprite)
                 end
             end
         end
@@ -75,9 +74,6 @@ function transition_update()
         Scene = Transition_scene
 
         if Transition_level ~= nil then
-            if Latest_level + 1 == Transition_level then
-                Latest_level = Transition_level
-            end
             Current_level = Transition_level
         end
 
