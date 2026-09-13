@@ -128,9 +128,9 @@ function player_systems_update()
 end
 
 function player_systems_draw()
-    print("level "..Current_level.."  "..Active_level.name, 4, 4, 7)
-    print("arrows: aim/power", 4, 13, 6)
-    print("z: restart  hold z: menu", 4, 122, 6)
+    print("level "..Current_level.."  "..Active_level.name, 4, 4, 5)
+    print("arrows: aim/power", 4, 13, 5)
+    print("z: restart  hold z: menu", 4, 122, 5)
     if Active_level.hint then print(Active_level.hint, 4, 22, 6) end
 
     local start_x, start_y = Ui_frame_start_loc[1], Ui_frame_start_loc[2]

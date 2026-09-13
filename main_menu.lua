@@ -8,6 +8,7 @@ Main_menu_sprite_background_id = 48
 Main_menu_sprite_id_hover = 49
 
 Main_menu_sprite_base_id = 63
+Main_menu_lock_id = 96
 -- Pixel offset: align the two 8x8 sprite layers.
 Main_menu_base_sprite_offset = {0, 0}
 
@@ -67,14 +68,14 @@ function main_menu_update()
         return
     end
 
-    if btnp(5) then
+    if btnp(5) and get_current_level() <= Latest_level + 1 then
         transition("Gameplay", get_current_level())
     end
 end
 
 function main_menu_draw()
     map(Main_menu_background_loc[1], Main_menu_background_loc[2], 0, 0, 16, 16)
-    print("choose your orbit", 30, 24, 7)
+    print("choose your level", 30, 24, 7)
     if Campaign_complete then print("all 8 levels complete!", 22, 36, 11) end
     for x = 1,Menu_bounds[1] do
         for y = 1,Menu_bounds[2] do
@@ -82,7 +83,13 @@ function main_menu_draw()
             local tile_x, tile_y = Main_menu_sprite_locs[y][x][1], Main_menu_sprite_locs[y][x][2]
             local frame = level == get_current_level() and Main_menu_sprite_id_hover or Main_menu_sprite_background_id
             spr(frame, tile_x, tile_y)
-            spr(Main_menu_sprite_base_id + level, tile_x + Main_menu_base_sprite_offset[1], tile_y + Main_menu_base_sprite_offset[2])
+            local inner_sprite
+            if Latest_level + 1 < level then
+                inner_sprite = Main_menu_lock_id
+            else
+                inner_sprite = Main_menu_sprite_base_id + level
+            end
+            spr(inner_sprite, tile_x + Main_menu_base_sprite_offset[1], tile_y + Main_menu_base_sprite_offset[2])
             if Completed_levels[level] then pset(tile_x+3, tile_y+10, 11) end
         end
     end

@@ -1,5 +1,5 @@
 Scene = "Title"
-Latest_level = 0
+Latest_level = 0g
 Current_level = 0
 
 -- Dispatch by the sprite ID stored in each map cell.
@@ -46,6 +46,7 @@ function transition(new_scene, level)
     Transition_x = 128
     Transition_started_at = time()
     Transition_state = "covering"
+    Latest_level = max(Transition_level, Latest_level)
 end
 
 function transition_update()
