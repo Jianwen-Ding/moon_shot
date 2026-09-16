@@ -193,7 +193,7 @@ test("eight distinct maps, centered colliders and copied inventories", function(
     end
 end)
 test("opaque backgrounds and transition tiles, populated artwork", function()
-    for _, origin in ipairs({Title_screen_sprite,Main_menu_background_loc,Background_loc,Transition_map}) do
+    for _, origin in ipairs({Main_menu_background_loc,Background_loc,Transition_map}) do
         for y = origin[2],origin[2]+15 do for x = origin[1],origin[1]+15 do
             local id = mget(x,y)
             assert(id ~= 0)

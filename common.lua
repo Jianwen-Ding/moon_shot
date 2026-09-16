@@ -1,5 +1,5 @@
 Scene = "Title"
-Latest_level = 0g
+Latest_level = 0
 Current_level = 0
 
 -- Dispatch by the sprite ID stored in each map cell.

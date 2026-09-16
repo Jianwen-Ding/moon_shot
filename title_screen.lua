@@ -1,9 +1,7 @@
--- Map tile origin of the title's 16x16 region.
-Title_screen_sprite = {0, 0}
-local z_released = true
+-- Title artwork starts at sprite 131 and fills the 128x128 screen.
+Title_screen_sprite = 131
 
 function title_screen_init()
-    z_released = not btn(4)
 end
 
 function title_screen_teardown()
@@ -11,20 +9,14 @@ function title_screen_teardown()
 end
 
 function title_screen_update()
-    -- A Z held while returning here must not auto-repeat into the menu.
-    if not btn(4) then z_released = true end
-    if (z_released and btnp(4)) or btnp(5) then
+    if btnp(5) then
         transition("MainMenu")
     end
 end
 
 function title_screen_draw()
-    map(Title_screen_sprite[1], Title_screen_sprite[2], 0, 0, 16, 16)
-    print("moon shot", 46, 28, 7)
-    spr(Id_ship_sprite, 34, 52)
-    spr(Id_goal_planet_sprite, 86, 52)
-    line(47, 55, 77, 55, 10)
-    print("throw moons to clear a path", 12, 76, 6)
-    print("then launch your ship", 24, 86, 6)
-    print("press x or z", 40, 106, 10)
+    cls(0)
+    sspr((Title_screen_sprite%16)*8, flr(Title_screen_sprite/16)*8,
+        64, 64, 0, 0, 128, 128)
+    print("press x to continue", 26, 118, 10)
 end
